@@ -63,4 +63,17 @@ grep -Fxq 'staging_location=Temporary' "$sandbox/native-0.1.0/STAGING-STATUS.txt
 [[ -s "$sandbox/native-0.1.0/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/test.ko" ]]
 [[ ! -e "$sandbox/native-0.1.0/System/Kernel/Modules/$release" ]]
 ( cd "$sandbox/native-0.1.0" && sha256sum -c SHA256SUMS.txt >/dev/null )
-echo 'PASS: native product version/ABI identity, legacy package fallback, checksums and preservation'
+
+# Default production staging must use /Temporary/InfiltratorOS, not dist,
+# and must retain the correct /System/Kernel skeleton without installing it.
+native_temp="$sandbox/Temporary/InfiltratorOS"
+INFILTRATOROS_TEMP_ROOT="$native_temp" bash scripts/infiltrator/stage-native.sh \
+  --packages "$sandbox/packages" --objects "$sandbox/obj"
+native_stage="$native_temp/Kernel/Staging/InfiltratorOS-0.1.0"
+[[ -s "$native_stage/System/Kernel/Images/InfiltratorOS-0.1.0.img" ]]
+[[ -s "$native_stage/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/test.ko" ]]
+[[ ! -e "$native_stage/System/Kernel/Modules/$release" ]]
+[[ ! -e "$sandbox/Temporary/InfiltratorOS/dist" ]]
+( cd "$native_stage" && sha256sum -c SHA256SUMS.txt >/dev/null )
+
+echo 'PASS: native Temporary staging, product version/ABI metadata, preservation and checksums'
