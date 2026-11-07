@@ -161,8 +161,12 @@ This follows the existing InfiltratorOS authority:
 
 The `Modules/InfiltratorOS-<component-version>/` hierarchy identifies the
 native **staged product**; actual module ABI identity is separately recorded
-in the staging manifest and binary metadata. This is not yet an active
-module-loader search path. The `Filesystems/` namespace is reserved for the
+in the staging manifest and binary metadata. This native module hierarchy is made available to Linux kmod through the
+new `/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe` adapter, which
+creates a short-lived dependency-indexed `/run/infiltratoros-kernel` view.
+The kernel build uses `CONFIG_MODPROBE_PATH` for kernel-initiated requests.
+This only becomes active after a native root and userspace are available;
+it does not establish early-initramfs or physical boot qualification. The `Filesystems/` namespace is reserved for the
 individual filesystem-provider builds and is not populated by copying every
 upstream Linux filesystem module there. EFI BOOT binaries and firmware-stage
 drivers belong to the independent **Boot** component, not this repository.
@@ -185,14 +189,17 @@ and `Modules`; optional developer files in `Headers` and `Debug`.
 All these are defined in the authoritative OS filesystem contract.
 Native packages have **no** legacy Debian kernel maintainer hooks that
 could change the host's initramfs, bootloader or kernel configuration.
-This establishes file placement only; native runtime module loading and
-Boot/Setup installation remain separate qualifications.
+This establishes native file placement and a tested kmod discovery/alias
+adapter. The adapter's synthetic regression tests do not prove a physical
+boot, live module insertion, early initramfs or Setup installation.
 
 The transitional kernel image and modules currently retain Linux ABI
 dependencies. Their native staging paths are **not yet a usable replacement
-for `/boot` and `/lib/modules`**: the runtime loader, initramfs, module
-dependency maps, UEFI handoff, signing, rollback and recovery still need to
-be integrated and verified. No staging operation claims a bootable installation.
+for `/boot` and `/lib/modules`**: runtime kmod indexing and alias resolution
+are now implemented without modifying either inherited host path, but native
+root availability, early initramfs drivers, UEFI handoff, signed-module
+loading, rollback and recovery still need end-to-end verification. No
+staging operation claims a bootable installation.
 
 ## Native builder and staging
 
