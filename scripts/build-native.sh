@@ -111,6 +111,10 @@ matches_running "$source_dir" || fail "Source tree does not match installed sour
 log "Upstream kernel code: $base (distribution ABI: $running)"
 obj="$work/obj"; mkdir -p "$obj"
 cp "$config" "$obj/.config"
+# Vendor kernel configurations may reference private/distribution-supplied
+# certificate files not carried in the published source package. Never edit
+# the installed /boot config or fabricate a certificate to satisfy Kbuild.
+bash "$root/scripts/infiltrator/prepare-certificates.sh" "$source_dir" "$obj"
 log "Configuring with the running distro defaults"
 make -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator olddefconfig
 release=$(make -s --no-print-directory -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator kernelrelease)
