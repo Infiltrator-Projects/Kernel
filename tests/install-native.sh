@@ -21,7 +21,7 @@ for name in "infiltratoros-kernel-image-$version" \
   p="$sandbox/Package"
   cat > "$p/DEBIAN/control" <<EOF
 Package: $name
-Version: $version-3
+Version: $version-4
 Architecture: amd64
 Maintainer: InfiltratorOS Test <test@example.invalid>
 X-InfiltratorOS-Module-ABI: $abi
@@ -46,7 +46,7 @@ EOF
       mkdir -p "$p/System/Kernel/Debug/InfiltratorOS-$version/lib/modules/$abi"
       printf 'compiled vmlinux\n' > "$p/System/Kernel/Debug/InfiltratorOS-$version/lib/modules/$abi/vmlinux" ;;
   esac
-  dpkg-deb --build "$p" "$packages/${name}_${version}-2_amd64.deb" >/dev/null
+  dpkg-deb --build "$p" "$packages/${name}_${version}-4_amd64.deb" >/dev/null
   rm -rf "$p/System"
 done
 (cd "$packages" && sha256sum ./*.deb > "SHA256SUMS-InfiltratorOS-Kernel-$version.txt")

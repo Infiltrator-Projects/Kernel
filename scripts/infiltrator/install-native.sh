@@ -85,8 +85,8 @@ for pkg in "$image_pkg" "$header_pkg" "$debug_pkg"; do
   deb="${files[0]}"
   [[ $(dpkg-deb -f "$deb" Package) == "$pkg" ]] ||
     fail "Unexpected package name in $deb"
-  [[ $(dpkg-deb -f "$deb" Version) == "$version-3" ]] ||
-    fail "Expected native revision $version-3 in $deb"
+  [[ $(dpkg-deb -f "$deb" Version) == "$version-4" ]] ||
+    fail "Expected native revision $version-4 in $deb"
   thisabi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI)
   [[ "$thisabi" == "$version-infiltrator" ]] ||
     fail "Invalid kernel module ABI '$thisabi' in $deb; expected $version-infiltrator (not upstream Linux 7.0.14)"

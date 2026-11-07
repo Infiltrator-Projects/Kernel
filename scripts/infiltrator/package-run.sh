@@ -160,7 +160,16 @@ if [[ -n "$jobs" ]]; then args+=(--jobs "$jobs"); fi
   fail "Native staged output checksum failure; see $logfile"
 if (( ! build_only )); then
   install_args=(--packages "$packages")
-  if (( replace_existing )); then install_args+=(--replace-existing); fi
+  if (( replace_existing )); then
+    install_args+=(--replace-existing)
+  elif [[ -e "/System/Kernel/Images/InfiltratorOS-$product_version.img" ||
+          -e "/System/Kernel/Runtime/InfiltratorOS-$product_version" ]]; then
+    # The public .run is a self-contained upgrade path. An older native
+    # kernel of the same component version must not make a second run fail.
+    # The native installer backs up every replaced versioned path first.
+    printf "Existing native Kernel %s found; preserving and upgrading it.\n" "$product_version"
+    install_args+=(--replace-existing)
+  fi
   ( cd "$source_dir" && bash scripts/infiltrator/install-native.sh \
     "${install_args[@]}" ) 2>&1 | tee -a "$logfile" ||
     fail "Native installation failed; see $logfile"

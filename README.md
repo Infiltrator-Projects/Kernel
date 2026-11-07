@@ -81,10 +81,14 @@ InfiltratorOS release. The first-party builder explicitly sets
 release header before compiling. Native package generation rejects the
 old `7.0.14-infiltrator` identity.
 
-The new corrected Debian package **revision `0.1.0-3`** distinguishes
-these binaries from the previous `-1` wrong-install-path packages
-and the `-2` correct-path packages with an inherited Linux version.
-Those revisions are Debian packaging identifiers, not OS versions.
+The corrected Debian package revision `0.1.0-3` introduced the independently
+versioned ABI; the current **revision `0.1.0-4`** additionally supplies the
+native module loader and firmware search integration. The historical `-1`
+and `-2` packages retained wrong native paths or an inherited Linux version.
+These are Debian packaging revisions, not separate InfiltratorOS kernel versions.
+The normal GitHub `.run` automatically preserves and replaces existing
+same-version 0.1.0 native files when present, without requiring command-line
+options; the backups are retained under `/Temporary/InfiltratorOS/Kernel/Backups/`.
 
 **Verification status:** The version correction is committed in Git,
 but a complete fresh kernel compile **using this revised code** has

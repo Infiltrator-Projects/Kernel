@@ -42,6 +42,7 @@ jobs:
           bash -n "$installer"
           grep -Fxq "expected_commit=$GITHUB_SHA" "$installer"
           grep -Fq '/Temporary/InfiltratorOS' "$installer"
+          grep -Fq 'Existing native Kernel' "$installer"
           grep -Fq 'fetch --no-tags --depth 1 origin "$expected_commit"' "$installer"
           bash "$installer" --help | grep -Fq '/System/Kernel'
           if grep -Fq '__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__' "$installer"; then
@@ -66,12 +67,12 @@ jobs:
             gh release upload "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" --clobber
             gh release edit "$RELEASE_TAG" \
               --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
-              --notes "InfiltratorOS Kernel version 0.1.0 (compiled UTS_RELEASE/module ABI: 0.1.0-infiltrator; Debian revision: 0.1.0-3). Imported upstream Linux source base: 7.0.14 (NOT an InfiltratorOS version). Tiny .run pinned to public Git commit $GITHUB_SHA. Running it downloads that exact source under /Temporary/InfiltratorOS/Kernel, compiles a fresh kernel on the user's machine and verifies native packages before installing under /System/Kernel unless --build-only is selected. NO source embedded; NO kernel compilation on GitHub. This is not yet a qualified bootable OS; existing host /boot, EFI and NVRAM remain unchanged."
+              --notes "InfiltratorOS Kernel version 0.1.0 (compiled UTS_RELEASE/module ABI: 0.1.0-infiltrator; Debian revision: 0.1.0-4). Imported upstream Linux source base: 7.0.14 (NOT an InfiltratorOS version). Tiny .run pinned to public Git commit $GITHUB_SHA. Running it downloads that exact source under /Temporary/InfiltratorOS/Kernel, compiles a fresh kernel on the user's machine and verifies native packages before installing under /System/Kernel unless --build-only is selected. NO source embedded; NO kernel compilation on GitHub. This is not yet a qualified bootable OS; existing host /boot, EFI and NVRAM remain unchanged."
           else
             gh release create "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" \
               --target "$GITHUB_SHA" --prerelease \
               --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
-              --notes "InfiltratorOS Kernel 0.1.0, UTS_RELEASE/module ABI 0.1.0-infiltrator; upstream Linux source 7.0.14. Tiny .run downloads pinned GitHub source, compiles locally under /Temporary/InfiltratorOS/Kernel and installs native files under /System/Kernel. New native Debian revision 0.1.0-3. No kernel compilation on GitHub; early development build."
+              --notes "InfiltratorOS Kernel 0.1.0, UTS_RELEASE/module ABI 0.1.0-infiltrator; upstream Linux source 7.0.14. Tiny .run downloads pinned GitHub source, compiles locally under /Temporary/InfiltratorOS/Kernel and installs native files under /System/Kernel. New native Debian revision 0.1.0-4. No kernel compilation on GitHub; early development build."
           fi
           # Verify GitHub's public release now has exactly one small .run.
           gh release view "$RELEASE_TAG" --json assets \

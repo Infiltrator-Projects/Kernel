@@ -179,7 +179,8 @@ binaries were still built with the **upstream Linux-derived**
 `7.0.14-infiltrator` release and module ABI. The current corrected
 first-party builder produces **InfiltratorOS Kernel 0.1.0** with
 Kbuild UTS release and module ABI **`0.1.0-infiltrator`**, using
-Debian package revision **`0.1.0-3`**. The source `Makefile`
+Debian package revision **`0.1.0-3`** for the ABI correction,
+and **`0.1.0-4`** for the first native kmod/firmware runtime integration. The source `Makefile`
 remains upstream Linux `7.0.14` for internal Linux API compatibility.
 Native package generation refuses to label new binaries
 `7.0.14-infiltrator`. The historical no-compile repacker can still
