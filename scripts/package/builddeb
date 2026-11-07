@@ -137,7 +137,7 @@ install_linux_image_dbg () {
 
 install_kernel_headers () {
 	pdir=debian/$1
-	version=${1#linux-headers-}
+	version=${KERNELRELEASE}
 
 	# Override $CC only for cross-compiles, to not unnecessarily rebuild
 	# scripts/ including plugins, which may lead to a full kernel rebuild.
@@ -167,10 +167,10 @@ package=$1
 case "${package}" in
 *-dbg)
 	install_linux_image_dbg "${package}";;
-linux-image-*|user-mode-linux-*)
+linux-image-*|user-mode-linux-*|infiltratoros-kernel-image-*)
 	install_linux_image "${package}";;
 linux-libc-dev)
 	install_libc_headers "${package}";;
-linux-headers-*)
+linux-headers-*|infiltratoros-kernel-headers-*)
 	install_kernel_headers "${package}";;
 esac
