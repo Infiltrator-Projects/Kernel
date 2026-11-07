@@ -87,16 +87,28 @@ Mint test machine, and a versioned source-first staging implementation exists.
 **However, the present staged tree is only a transitional compatibility
 artifact, not proof of the final InfiltratorOS kernel layout or runtime.**
 
-Today `stage-native.sh` unpacks a Linux-ABI package and copies the entire
-inherited `/lib/modules/<upstream-module-abi>/kernel/...` subtree into
-`/System/Kernel/Modules/<upstream-module-abi>/kernel/...`. This includes
-unrelated distribution drivers and inherited filesystem modules. A new
-InfiltratorOS prefix and image filename do **not** make those modules native,
-hardware-selected, or decoupled from Linux Kbuild/module-loading. The
-`<upstream-module-abi>` directory is still required for the current compiled
-modules' vermagic and Linux loader compatibility; it is **not** our future
-product version or native kernel ABI. Do not disguise this mismatch by merely
-renaming the directory or modifying vermagic.
+The **preserved first staging** under `~/Kernel/dist/native` copies the
+Linux `/lib/modules/<upstream-module-abi>/kernel/...` tree into the staged
+`/System/Kernel/Modules/<upstream-module-abi>/kernel/...`. That was a
+**mistake in the native product staging layout** and is preserved only as
+evidence of the first successful compile.
+
+**Corrected staging for subsequent builds** lives under
+`/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-<VERSION>/System/Kernel/`.
+Its native module directory is
+`Modules/InfiltratorOS-<VERSION>/kernel/...`, not a directory named for the
+Linux source version. The exact transitional kernel/module ABI remains in
+`STAGING-STATUS.txt` and the package's `X-InfiltratorOS-Module-ABI`
+field. **This is a naming and placement correction only**. The binaries
+still contain inherited Linux vermagic, and the staged modules cannot
+simply be installed into their new directory and expected to work with
+Linux modprobe. Native module loading must be implemented and qualified.
+
+The staging currently copies the whole distribution module set, not
+machine-selected drivers, and includes inherited Linux filesystem modules.
+These are compatibility inputs, **not** independent InfiltratorOS filesystem
+engines. Do not present successful staging as evidence of a finished native
+runtime or hardware-specific driver selection.
 
 **The OS filesystem contract is owned by
 [InfiltratorOS/docs/FILESYSTEM.md](https://github.com/Infiltrator-Projects/InfiltratorOS/blob/main/docs/FILESYSTEM.md)
@@ -117,9 +129,9 @@ Native completion requires hardware-appropriate module selection, independent
 version/ABI identity, qualified Boot/Setup handoff, a working native
 module loader, correct driver and filesystem provider ownership, and runtime
 mount/boot tests. Until those milestones, call this **compatibility staging**,
-not a final native filesystem layout. The verified compiled baseline and
-`dist/native/` tree must be preserved; do not clean or rename live module
-paths while new Debian packaging is being produced.
+not a final native filesystem layout. The previously verified compiled baseline and historical
+`~/Kernel/dist/native/` tree must be preserved. No migration script deletes
+or renames those existing artifacts or running host module paths.
 
 ## Native artifact layout
 
@@ -133,7 +145,7 @@ This follows the existing InfiltratorOS authority:
 │   ├── InfiltratorOS-<component-version>.config
 │   └── InfiltratorOS-<component-version>.map  (when available)
 ├── Modules/
-│   └── <module-abi>/
+│   └── InfiltratorOS-<component-version>/
 │       └── kernel/.../*.ko
 ├── Filesystems/
 │   └── <format>.ko                 (owned by Filesystem-*; not this package)
@@ -141,8 +153,10 @@ This follows the existing InfiltratorOS authority:
     └── ...                         (only verified firmware from its owner)
 ```
 
-The `Modules/<module-abi>/` hierarchy keeps module ABI identity and dependency
-relationships intact. The `Filesystems/` namespace is reserved for the
+The `Modules/InfiltratorOS-<component-version>/` hierarchy identifies the
+native **staged product**; actual module ABI identity is separately recorded
+in the staging manifest and binary metadata. This is not yet an active
+module-loader search path. The `Filesystems/` namespace is reserved for the
 individual filesystem-provider builds and is not populated by copying every
 upstream Linux filesystem module there. EFI BOOT binaries and firmware-stage
 drivers belong to the independent **Boot** component, not this repository.
@@ -162,18 +176,31 @@ make build-only SKIP_DEPS=1
 make stage-native
 ```
 
-`build-only` creates locally compiled Debian kernel packages in `dist/`;
-`stage-native` unpacks **that locally compiled image package** and stages
-the image and module hierarchy in `dist/native/System/Kernel/`, with
-`SHA256SUMS.txt` and `STAGING-STATUS.txt`. It does not touch the live
-`/System`, change the host's bootloader, or install packages.
+`build-only` creates locally compiled Debian kernel packages under
+`/Temporary/InfiltratorOS/Kernel/Packages/` and uses
+`/Temporary/InfiltratorOS/Kernel/Build/` for **new** object-tree work.
+`stage-native` unpacks the compiled image package and writes an **uninstalled**
+staging tree under
+`/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-<VERSION>/System/Kernel/`,
+with `SHA256SUMS.txt` and `STAGING-STATUS.txt`. None of these paths
+installs files into the host's actual `/System` directory.
+
+The original first native compile used inherited in-source Kbuild objects and
+historical `~/Kernel/dist/` output. All those files remain preserved and
+can be explicitly selected for read-only compatibility staging. Kbuild's
+internal `debian/` workspace, source names, and original build version are
+implementation details required to compile a Linux-derived baseline; they
+are **not** native InfiltratorOS installation destinations. On a legacy
+in-source build Kbuild itself may also emit packages beside the source tree;
+the wrapper copies validated outputs into `/Temporary/InfiltratorOS`
+without deleting the originals.
 
 ```bash
 make package-run
 ```
 
-Creates `dist/InfiltratorOS-Kernel-<VERSION>-amd64.run`, a source-bearing,
-self-extracting native builder assembled from the committed Git tree. On a
+Creates `/Temporary/InfiltratorOS/Kernel/Packages/InfiltratorOS-Kernel-<VERSION>-amd64.run`,
+a source-bearing builder assembled from the committed Git tree. On a
 supported computer it extracts the source locally, detects that host's running
 kernel and configuration, compiles with the local toolchain, produces its own
 packages and stages its `/System/Kernel` hierarchy.
