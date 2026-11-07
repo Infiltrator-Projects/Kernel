@@ -10,6 +10,39 @@ are **InfiltratorOS**. Do not bulk-rename internal kernel symbols, filesystem
 paths, ABI names or original copyright/licence records: Linux-origin names may
 remain required for functional or legal reasons until individually migrated.
 
+## Version identities and transition
+
+Keep these identities separate:
+
+- **InfiltratorOS** has its own release version in the separate
+  `Infiltrator-Projects/InfiltratorOS/VERSION` (currently `1.0.65`).
+  That number describes the operating-system integration release, **not**
+  the independently versioned Kernel component.
+- **InfiltratorOS Kernel** has its own release version in this repository's
+  root `VERSION` (currently `0.1.0`). This is the **product-facing
+  component version** used by the native `.run` and the intended final
+  Debian kernel package version.
+- **Upstream source and ABI** remain independent: the imported Ubuntu HWE
+  source currently reports Linux `7.0.14`; its distinct test kernel ABI is
+  `7.0.14-infiltrator`. These identify inherited low-level kernel
+  compatibility, module vermagic and dependency paths, and are not the
+  InfiltratorOS Kernel product release number.
+
+**Future packaging contract (not implemented yet):** the visible package
+family should use `infiltratoros-kernel`, with corresponding native headers
+and debug packages. Debian `Version` should derive from this repository's
+`VERSION`, with an appropriate package revision. The underlying kernel ABI
+must remain accessible in packaging metadata and wherever the actual module
+loader or early boot paths require it. Merely renaming a generated Debian
+package filename would leave its internal `Package` identity, dependency
+wiring and install paths wrong.
+
+The inherited Kbuild packaging currently emits `linux-image-7.0.14-infiltrator`
+and companion packages. They are an **engineering baseline**, not the desired
+final product identity. Do not change generated packaging or kernel ABI inputs
+during an active compilation; migrate and qualify the package generator,
+header/debug links, native installer, Boot and Setup as one subsequent change.
+
 ## Native artifact layout
 
 This follows the existing InfiltratorOS authority:
