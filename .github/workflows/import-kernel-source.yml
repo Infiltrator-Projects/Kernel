@@ -1,4 +1,5 @@
 name: Import official Linux kernel baseline into repository root
+# Restored complete project tree before running import.
 on:
   push:
     branches: [main]
