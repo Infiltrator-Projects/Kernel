@@ -91,6 +91,44 @@ off-device backup. The source is separately protected in GitHub; fully
 protecting the compiled binary assets against physical disk failure requires
 a second physical device or another remote destination.
 
+## Corrected native Debian packages — no kernel rebuild required
+
+**Important historical distinction:** The original successfully compiled
+Kernel `0.1.0-1` packages used inherited Linux installation paths
+(`/boot`, `/lib/modules`, `/usr/src`, `/usr/lib/debug`). Simply
+copying their image/modules into native staging did not fix the actual Debian
+package. These `-1` packages and their successful QEMU boot evidence remain
+preserved and must **never** be overwritten or silently reinstalled.
+
+The `scripts/package/builddeb` native mode now writes actual native
+`0.1.0-2` package payloads exclusively under `/System/Kernel/`, with
+image and modules in `Images/` and `Modules/`, optional development
+headers in `Headers/`, and debug symbols in `Debug/`. These paths are
+specified by the authoritative OS filesystem contract. The new native
+packages have no inherited Debian `/etc/kernel` or `/usr/share/kernel`
+post-install hooks.
+
+**Use the original compiled binaries instead of rebuilding:**
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/repackage-native.sh
+```
+
+This verifies the already archived first kernel image and original three
+Debian packages, creates new `0.1.0-2` image/headers/debug packages under
+`/Temporary/InfiltratorOS/Kernel/Packages/NativeLayout/InfiltratorOS-0.1.0/`,
+inspects their **actual payload paths**, and generates a SHA-256 manifest.
+The old `-1` files remain immutable; this does not compile, install,
+modify Mint's boot configuration or boot the new package. The end-to-end
+synthetic Debian tests are `tests/repackage-native.sh` and
+`tests/native-builddeb-paths.sh`.
+
+**This source fix is committed, but a successful real laptop repackaging
+has not yet been observed.** A properly located Debian payload is a file
+placement improvement, not proof that InfiltratorOS is fully bootable or
+that its eventual kernel module loader and native Boot/Setup installer are
+complete.
+
 ## Isolated UEFI handoff test — first successful run
 
 The Mint Latitude 5550 has a checksum-verified native staged kernel
