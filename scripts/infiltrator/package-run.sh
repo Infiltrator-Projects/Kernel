@@ -1,45 +1,46 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Publishable source-bearing InfiltratorOS Kernel .run installer.
-# Embeds GitHub-committed source, never local compiler objects.
+# Publish a SMALL network-bootstrap .run. Kernel source stays in public Git.
+# The host executing this .run downloads the exact committed source and builds.
 set -euo pipefail
 fail() { printf 'InfiltratorOS Kernel release: ERROR: %s\n' "$*" >&2; exit 1; }
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 cd "$root"
-for tool in git xz tar sha256sum; do
-  command -v "$tool" >/dev/null || fail "Missing utility: $tool"
-done
-[[ -d .git ]] || fail 'Release bundle must be created from a Git checkout'
+command -v git >/dev/null || fail 'git is required to identify the release commit'
+[[ -d .git ]] || fail 'Produce public releases from a checked-out repository'
 [[ -z $(git status --porcelain --untracked-files=no) ]] ||
-  fail 'Tracked source modifications must be committed before packaging'
+  fail 'Commit tracked changes to GitHub before packaging'
 version=$(tr -d '\r\n' < VERSION)
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Invalid Kernel VERSION'
+commit=$(git rev-parse HEAD)
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || fail 'Could not pin the exact public source commit'
 temporary_root=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
-[[ "$temporary_root" == /* && "$temporary_root" != / ]] ||
-  fail 'Invalid temporary root'
+[[ "$temporary_root" == /* && "$temporary_root" != / ]] || fail 'Invalid Temporary root'
 out="$temporary_root/Kernel/Packages"
-mkdir -p "$out" || fail "Cannot create native package destination: $out"
+mkdir -p "$out" || fail 'Cannot create package output directory'
 outfile="$out/InfiltratorOS-Kernel-$version-amd64.run"
 [[ ! -e "$outfile" && ! -L "$outfile" ]] ||
-  fail "Existing source-bearing release preserved: $outfile"
+  fail "Existing .run preserved: $outfile"
 tmp=$(mktemp "$out/.InfiltratorOS-Kernel-$version.XXXXXXXX")
 trap 'rm -f -- "$tmp"' EXIT
 cat > "$tmp" <<'RUNNER'
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# InfiltratorOS Kernel: from GitHub-committed source, compile a truly fresh
-# independent object tree, check actual .debs, and install to /System/Kernel.
-# Never installs under Mint's /boot, /lib/modules or /usr; never edits EFI.
+# Small public bootstrap installer. The kernel source is DOWNLOADED from
+# Infiltrator-Projects/Kernel at the release's exact pinned Git commit.
+# All source, compiler objects, packages and logs live under /Temporary.
 set -euo pipefail
 fail() { printf 'InfiltratorOS Kernel .run: ERROR: %s\n' "$*" >&2; exit 1; }
+repo='https://github.com/Infiltrator-Projects/Kernel.git'
+expected_commit=__PINNED_COMMIT__
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
   echo 'Usage: ./InfiltratorOS-Kernel-0.1.0-amd64.run [--build-only] [--jobs N] [--install-deps]'
-  echo 'Default: extract fresh GitHub source under /Temporary/InfiltratorOS/Kernel,'
-  echo 'compile actual Kernel and modules (never reuse old objects), validate .deb'
-  echo 'installation paths and install only under /System/Kernel.'
-  echo 'Boot activation and EFI/NVRAM changes are NOT performed.'
-  echo '--build-only: compile/test without installing under /System/Kernel.'
-  echo '--install-deps: explicitly permit APT to install build prerequisites.'
+  echo 'Downloads the exact release source from GitHub into /Temporary/InfiltratorOS/Kernel.'
+  echo 'Freshly compiles on THIS machine, verifies actual native Debian package paths,'
+  echo 'and installs files under /System/Kernel (not under Mint /boot).'
+  echo 'Does not change EFI/NVRAM or activate a new boot kernel.'
+  echo '--build-only: download, compile and verify without native file installation.'
+  echo '--install-deps: allow APT installation of missing build prerequisites.'
   exit 0
 fi
 build_only=0
@@ -51,21 +52,20 @@ while (( $# )); do
     --install-deps) install_deps=1 ;;
     --jobs)
       shift; (( $# )) || fail '--jobs requires a number'
-      [[ "$1" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid job count'
+      [[ "$1" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid --jobs value'
       jobs=$1 ;;
-    *) fail "Unexpected option: $1" ;;
+    *) fail "Unknown option: $1" ;;
   esac
   shift
 done
-for tool in tar xz mktemp tee dpkg-deb sha256sum rsync; do
-  command -v "$tool" >/dev/null || fail "Missing utility: $tool"
+for tool in git mktemp tee dpkg-deb sha256sum rsync; do
+  command -v "$tool" >/dev/null || fail "Required command not installed: $tool"
 done
 temporary_root=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
-[[ "$temporary_root" == /* && "$temporary_root" != / ]] ||
-  fail 'Invalid /Temporary workspace'
+[[ "$temporary_root" == /* && "$temporary_root" != / ]] || fail 'Invalid Temporary root'
 workspace="$temporary_root/Kernel"
 mkdir -p "$workspace/Build" "$workspace/Logs" "$workspace/Packages" "$workspace/Staging" ||
-  fail "Cannot create /Temporary workspace: $workspace"
+  fail "Cannot create native Temporary workspace: $workspace"
 work=$(mktemp -d "$workspace/Build/InfiltratorOS-Run.XXXXXXXX")
 source_dir="$work/Source"
 obj="$work/obj"
@@ -73,52 +73,54 @@ run_name=${work##*/}
 packages="$workspace/Packages/$run_name"
 stage="$workspace/Staging/$run_name"
 logfile="$workspace/Logs/$run_name.log"
-mkdir -p "$source_dir"
-line=$(awk '/^__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__$/ { print NR + 1; exit }' "$0")
-[[ "$line" =~ ^[1-9][0-9]*$ ]] || fail 'Missing embedded GitHub source archive'
-tail -n "+$line" "$0" | xz -dc | tar -xf - -C "$source_dir" ||
-  fail 'Embedded source extraction failed'
+printf 'Downloading InfiltratorOS Kernel source from GitHub commit %s\n' "$expected_commit"
+# Pin the immutable revision embedded at publication; NEVER silently switch
+# to a later main commit or use another machine's private compiler objects.
+git init -q -b main "$source_dir" || fail 'Cannot initialise source workspace'
+git -C "$source_dir" remote add origin "$repo"
+git -C "$source_dir" fetch --no-tags --depth 1 origin "$expected_commit" ||
+  fail 'Cannot fetch exact released source from public GitHub'
+git -C "$source_dir" checkout --detach -q FETCH_HEAD ||
+  fail 'Cannot check out verified public source commit'
+[[ $(git -C "$source_dir" rev-parse HEAD) == "$expected_commit" ]] ||
+  fail 'Downloaded source is not the committed release revision'
 [[ -s "$source_dir/Makefile" && -s "$source_dir/VERSION" &&
    -s "$source_dir/scripts/build-native.sh" &&
    -s "$source_dir/scripts/infiltrator/install-native.sh" ]] ||
-  fail 'Embedded full source does not contain the native Kernel installer'
+  fail 'Downloaded GitHub revision is incomplete'
 product_version=$(tr -d '\r\n' < "$source_dir/VERSION")
-printf 'InfiltratorOS Kernel: compiling new source-only build %s\n' "$product_version"
-printf 'Source: %s\nObject tree: %s\nPackages: %s\n' "$source_dir" "$obj" "$packages"
-printf 'Build log: %s\n' "$logfile"
+printf 'Building InfiltratorOS Kernel %s, fresh on this computer\n' "$product_version"
+printf 'Source: %s\nObjects: %s\nPackages: %s\nLog: %s\n' \
+  "$source_dir" "$obj" "$packages" "$logfile"
 args=(--build-only --fresh-objects --source-dir "$source_dir"
       --object-dir "$obj" --packages-dir "$packages")
 if (( ! install_deps )); then args+=(--skip-deps); fi
 if [[ -n "$jobs" ]]; then args+=(--jobs "$jobs"); fi
-# Pipefail preserves true compiler failure. Logs are never discarded.
 ( cd "$source_dir" && bash scripts/build-native.sh "${args[@]}" ) 2>&1 | tee "$logfile" ||
-  fail "Fresh compiler or native Debian packaging failed; log: $logfile"
+  fail "Fresh source compiler or package generation failed; see $logfile"
 ( cd "$source_dir" && bash scripts/infiltrator/stage-native.sh \
   --packages "$packages" --objects "$obj" --output "$stage" ) 2>&1 | tee -a "$logfile" ||
-  fail "Fresh native staging failed; log: $logfile"
-(
-  cd "$stage"
-  sha256sum --quiet -c SHA256SUMS.txt
-) || fail 'Fresh compiled image/modules SHA-256 verification failed'
+  fail "Native staging failed; see $logfile"
+( cd "$stage" && sha256sum --quiet -c SHA256SUMS.txt ) ||
+  fail "Native staged output checksum failure; see $logfile"
 if (( ! build_only )); then
   ( cd "$source_dir" && bash scripts/infiltrator/install-native.sh \
     --packages "$packages" ) 2>&1 | tee -a "$logfile" ||
-    fail "Native /System/Kernel installation failed; log: $logfile"
-  printf 'InfiltratorOS Kernel: freshly compiled and INSTALLED under /System/Kernel\n'
+    fail "Native installation failed; see $logfile"
+  printf 'PASS: locally compiled Kernel installed to /System/Kernel\n'
 else
-  printf 'InfiltratorOS Kernel: freshly compiled and verified; build-only requested, NOT installed\n'
+  printf 'PASS: locally compiled Kernel and native packages verified; not installed\n'
 fi
-printf 'Source, build objects, package files, staging and log remain under %s\n' "$workspace"
-printf '%s\n' 'Mint boot files, current running kernel, EFI and NVRAM were not changed.'
-exit 0
-__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__
+printf 'Build outputs and log retained under %s\n' "$workspace"
+printf '%s\n' 'No changes to existing Mint boot files, EFI or NVRAM.'
 RUNNER
-# Signed Git tags/commit history identify provenance; the raw bundled sources
-# are literally git archive HEAD, not developer-specific ~/Kernel changes.
-git archive --format=tar HEAD | xz -T2 -6 >> "$tmp" ||
-  fail 'Could not create compressed GitHub source archive'
+sed -i "s/^expected_commit=__PINNED_COMMIT__$/expected_commit=$commit/" "$tmp"
+grep -Fxq "expected_commit=$commit" "$tmp" || fail 'Bootstrap source commit pin missing'
+if grep -Fq '__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__' "$tmp"; then
+  fail 'Source archive marker must not be inside lightweight installer'
+fi
 chmod 755 "$tmp"
 mv -- "$tmp" "$outfile"
 trap - EXIT
-printf 'InfiltratorOS Kernel release: source-bearing installer created: %s\n' "$outfile"
-printf '%s\n' 'The .run compiles fresh in /Temporary and installs only under /System/Kernel.'
+printf 'InfiltratorOS Kernel release: lightweight downloader: %s\n' "$outfile"
+printf 'Source is fetched at runtime from commit %s\n' "$commit"
