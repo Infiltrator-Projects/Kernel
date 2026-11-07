@@ -19,10 +19,12 @@ mode=preview
 case "${1:-}" in
   '') ;;
   --relocate) mode=relocate; shift ;;
+  --relocate-upstream-remainder) mode=remainder; shift ;;
   --help|-h)
-    echo "Usage: bash scripts/infiltrator/audit-home-artifacts.sh [--relocate]"
+    echo "Usage: bash scripts/infiltrator/audit-home-artifacts.sh [--relocate|--relocate-upstream-remainder]"
     echo 'By default only reports identified home-directory kernel packages and metadata.'
-    echo '--relocate moves precisely identified files into the durable Kernel archive, retaining checksums.'
+    echo '--relocate moves the original strict approved set into the durable Kernel archive.'
+    echo '--relocate-upstream-remainder moves separately verified linux-upstream compatibility files into a NEW child directory.'
     exit 0 ;;
   *) fail "Unknown argument: $1" ;;
 esac
@@ -30,7 +32,22 @@ esac
 
 declare -a candidates=()
 declare -a unclassified=()
+declare -a upstream_remainder=()
 shopt -s nullglob
+
+# The first successful clean-up already archived the compiled upstream
+# Linux image .deb. Its embedded package VERSION is our precise provenance
+# for the three remaining upstream packaging outputs, without guessing
+# from unrelated filenames in the user home directory.
+upstream_version=
+archive_root="$HOME/InfiltratorOS-Kernel-Archive"
+upstream_baseline=("$archive_root/HistoricalHomeOutputs-$version/linux-image-$release"_*.deb)
+if (( ${#upstream_baseline[@]} == 1 )); then
+  archive_pkg=$(dpkg-deb -f "${upstream_baseline[0]}" Package 2>/dev/null) || archive_pkg=
+  if [[ "$archive_pkg" == "linux-image-$release" ]]; then
+    upstream_version=$(dpkg-deb -f "${upstream_baseline[0]}" Version 2>/dev/null) || upstream_version=
+  fi
+fi
 for f in "$HOME"/*; do
   [[ -f "$f" && ! -L "$f" ]] || continue
   name=$(basename "$f")
@@ -47,6 +64,22 @@ for f in "$HOME"/*; do
   esac
   if (( accepted )); then
     candidates+=("$f")
+    continue
+  fi
+  upstream_ok=0
+  if [[ -n "$upstream_version" ]]; then
+    case "$name" in
+      "linux-libc-dev_${upstream_version}_amd64.deb")
+        pkg=$(dpkg-deb -f "$f" Package 2>/dev/null) || pkg=
+        pkg_version=$(dpkg-deb -f "$f" Version 2>/dev/null) || pkg_version=
+        [[ "$pkg" == linux-libc-dev && "$pkg_version" == "$upstream_version" ]] && upstream_ok=1 ;;
+      "linux-upstream_${upstream_version}_amd64.buildinfo"|"linux-upstream_${upstream_version}_amd64.changes")
+        grep -Fxq 'Source: linux-upstream' "$f" &&
+        grep -Fxq "Version: $upstream_version" "$f" && upstream_ok=1 || : ;;
+    esac
+  fi
+  if (( upstream_ok )); then
+    upstream_remainder+=("$f")
   else
     case "$name" in
       linux-*.deb|linux-*.changes|linux-*.buildinfo|infiltratoros-*.deb|infiltratoros-*.changes|infiltratoros-*.buildinfo)
@@ -60,21 +93,35 @@ log "Approved home-directory Kbuild files: ${#candidates[@]}"
 for f in "${candidates[@]}"; do
   printf 'APPROVED  %10s bytes  %s\n' "$(stat -c %s -- "$f")" "$f"
 done
+if (( ${#upstream_remainder[@]} )); then
+  log "Verified upstream Kbuild remainder matched to the previously archived image package: "${#upstream_remainder[@]}" file(s)"
+  for f in "${upstream_remainder[@]}"; do
+    printf 'APPROVED-UPSTREAM %10s bytes  %s\n' "$(stat -c %s -- "$f")" "$f"
+  done
+fi
 if (( ${#unclassified[@]} )); then
   log 'Other Linux-looking files NOT automatically approved for moving:'
   printf 'UNCLASSIFIED %s\n' "${unclassified[@]}"
 fi
 if [[ "$mode" == preview ]]; then
   log 'READ-ONLY preview complete. No files were changed.'
-  log 'Use --relocate only if the approved names are the Kernel outputs you want removed from Home.'
+  log 'Use --relocate for the original approved set, or --relocate-upstream-remainder for the three verified upstream files.'
   exit 0
+fi
+if [[ "$mode" == remainder ]]; then
+  candidates=("${upstream_remainder[@]}")
 fi
 (( ${#candidates[@]} )) || { log 'No approved loose Kernel files to relocate'; exit 0; }
 # Keep the completed snapshot immutable: use an independent sibling folder.
-archive_root="$HOME/InfiltratorOS-Kernel-Archive"
 [[ -s "$archive_root/InfiltratorOS-Kernel-$version/SHA256SUMS-Archive.txt" ]] ||
   fail 'Verified 0.1.0 milestone archive not present; refusing to move original files'
 target="$archive_root/HistoricalHomeOutputs-$version"
+if [[ "$mode" == remainder ]]; then
+  [[ -s "$target/SHA256SUMS.txt" ]] ||
+    fail 'The original eight-file historical home archive is not verified and present'
+  [[ -n "$upstream_version" ]] || fail 'Cannot prove remaining files match the archived upstream kernel ABI/package version'
+  target="$target/UpstreamRemainder"
+fi
 [[ ! -e "$target" && ! -L "$target" ]] ||
   fail "Historical home outputs already preserved at $target; refusing overwrite"
 mkdir -p -- "$target" || fail "Could not create $target"
