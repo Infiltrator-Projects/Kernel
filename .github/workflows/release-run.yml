@@ -1,0 +1,71 @@
+name: Publish InfiltratorOS Kernel source-bearing .run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-run:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release-run]')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test native installer and actual Debian package generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/infiltrator/package-run.sh
+          bash -n scripts/infiltrator/install-native.sh
+          bash tests/install-native.sh
+          bash tests/native-builddeb-paths.sh
+          bash tests/package-identity.sh
+          bash tests/repackage-native.sh
+          test -s docs/upstream/source-id
+
+      - name: Build source-bearing executable from this exact committed source
+        shell: bash
+        env:
+          INFILTRATOROS_TEMP_ROOT: ${{ runner.temp }}/InfiltratorOS
+        run: |
+          set -euo pipefail
+          bash scripts/infiltrator/package-run.sh
+          version=$(tr -d '\r\n' < VERSION)
+          out="$INFILTRATOROS_TEMP_ROOT/Kernel/Packages"
+          installer="$out/InfiltratorOS-Kernel-$version-amd64.run"
+          test -s "$installer"
+          bash "$installer" --help | grep -Fq '/System/Kernel'
+          marker=$(awk '/^__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__$/ {print NR + 1; exit}' "$installer")
+          [[ "$marker" =~ ^[1-9][0-9]*$ ]]
+          tail -n "+$marker" "$installer" | xz -dc | tar -tf - > "$RUNNER_TEMP/source-files.txt"
+          for required in VERSION Makefile scripts/build-native.sh scripts/package/builddeb scripts/infiltrator/install-native.sh; do
+            grep -Fxq "$required" "$RUNNER_TEMP/source-files.txt"
+          done
+          (
+            cd "$out"
+            sha256sum "InfiltratorOS-Kernel-$version-amd64.run" > SHA256SUMS.txt
+            sha256sum --quiet -c SHA256SUMS.txt
+          )
+          echo "RUN_PATH=$installer" >> "$GITHUB_ENV"
+          echo "SHA_PATH=$out/SHA256SUMS.txt" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
+          echo "PASS: full committed kernel source packed into executable .run"
+
+      - name: Publish to GitHub Releases without overwriting
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "ERROR: $RELEASE_TAG exists; refusing overwrite"
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "InfiltratorOS Kernel $RELEASE_TAG — source-bearing .run" \
+            --notes "Full committed source, fresh compiler build under /Temporary/InfiltratorOS/Kernel, verifies native image/headers/debug Debian packages and installs under /System/Kernel. Does not replace Mint kernel files, EFI or NVRAM. Early development build: full InfiltratorOS boot and native module runtime are not yet qualified. Use --build-only to compile without installing."
