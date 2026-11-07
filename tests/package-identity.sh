@@ -60,6 +60,22 @@ grep -Fq 'System/Kernel/Debug/InfiltratorOS-' "$root/scripts/package/builddeb"
 grep -Fq 'packageversion=${product_version}-3' "$root/scripts/package/mkdebian"
 
 
+# Regression: InfiltratorOS 0.1.0 must NOT silently inherit Linux 7.0.14.
+# Native packaging must reject a stale KERNELRELEASE before it emits .debs.
+mkdir -p "$testdir/wrong-native/include/config"
+cp "$testdir/include/config/auto.conf" "$testdir/wrong-native/include/config/auto.conf"
+if (
+  cd "$testdir/wrong-native"
+  env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=7.0.14-infiltrator \
+    srctree="$root" KCONFIG_CONFIG="$testdir/.config" \
+    INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.0 \
+    sh "$root/scripts/package/mkdebian"
+) > "$testdir/wrong-abi.log" 2>&1; then
+  echo 'FAIL: Native 0.1.0 packaging accepted Linux 7.0.14 ABI' >&2
+  exit 1
+fi
+grep -Fq 'Native InfiltratorOS package ABI mismatch' "$testdir/wrong-abi.log"
+
 # Default mode must still generate upstream Linux names (for compatibility
 # with direct Kbuild and non-InfiltratorOS users of the imported source).
 mkdir -p "$testdir/legacy/include/config"
