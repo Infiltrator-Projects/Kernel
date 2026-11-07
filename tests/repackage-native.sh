@@ -62,6 +62,7 @@ final="$dest/InfiltratorOS-$version"
 [[ -s "$final/SHA256SUMS.txt" && -s "$final/NATIVE-PACKAGING-STATUS.txt" ]]
 (cd "$final" && sha256sum --quiet -c SHA256SUMS.txt)
 grep -Fxq 'Recompiled=no' "$final/NATIVE-PACKAGING-STATUS.txt"
+mkdir -p "$sandbox/Unpacked" "$sandbox/UnpackedControl"
 for pkg in "infiltratoros-kernel-image-$version" \
            "infiltratoros-kernel-headers-$version" \
            "infiltratoros-kernel-image-$version-dbg"; do
