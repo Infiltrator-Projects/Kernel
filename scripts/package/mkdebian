@@ -283,16 +283,24 @@ Description: $debug_description
 EOF
 fi
 
-# Extra Debian control metadata makes the transitional exact module ABI
-# inspectable without conflating it with the InfiltratorOS release.
+# Store the exact transitional module ABI as package metadata, distinct
+# from the independently versioned InfiltratorOS component.
 if [ "$native_identity" -eq 1 ]; then
-  for package in "$image_package" "$header_package" "$debug_package"; do
-    # The source generator creates distinct control paragraphs; insert metadata
-    # immediately after the Architecture line within each active stanza.
-    sed -i "/^Package: ${package}\\$/,/^$/ { /^Architecture: /a\\
-X-InfiltratorOS-Kernel-Version: $product_version\\nX-InfiltratorOS-Module-ABI: $KERNELRELEASE
-}" debian/control
-  done
+  # Add metadata to each generated paragraph after all packages are defined.
+  awk -v version="$product_version" -v abi="$KERNELRELEASE" '
+    /^Package: (infiltratoros-kernel-image-|infiltratoros-kernel-headers-)/ {
+      native=1
+    }
+    native && /^Architecture:/ {
+      print
+      print "X-InfiltratorOS-Kernel-Version: " version
+      print "X-InfiltratorOS-Module-ABI: " abi
+      native=0
+      next
+    }
+    { print }
+  ' debian/control > debian/control.native
+  mv debian/control.native debian/control
 fi
 
 cat <<EOF > debian/rules.vars
