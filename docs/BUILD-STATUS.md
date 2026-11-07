@@ -392,6 +392,64 @@ If there is an error, preserve and inspect
 do not rebuild or change the installed host's boot configuration
 in response.
 
+## FIRST SUCCESSFUL ACTUAL VIRTUAL KERNEL BOOT — 2026-11-07, Latitude 5550
+
+**Confirmed by Shannon's own Linux Mint terminal output.** On the physical
+Latitude 5550 as the host (without installing or booting a new host kernel),
+Shannon fast-forwarded Kernel `main` to `57e57ad78` and ran:
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/test-ovmf-handoff.sh
+```
+
+The shell returned successfully and the isolated test reported:
+
+```text
+InfiltratorOS OVMF: Verified staged InfiltratorOS Kernel 0.1.0 checksums
+infiltrator-boot_0.1.39_amd64.deb: OK
+InfiltratorOS OVMF: Boot EFI: /Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD/Boot/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI
+InfiltratorOS OVMF: Kernel: /Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/System/Kernel/Images/InfiltratorOS-0.1.0.img
+InfiltratorOS OVMF: Filesystem module: /System/Filesystems/FAT16.so
+InfiltratorOS OVMF: Launching disposable QEMU/OVMF boot and initramfs handoff test
+BOOT-FAT16-SO-LINUX-HANDOFF-PASS 5a6a4288a2c8821e2756918332dc3f01b403a2c14767ff8f6db00c0bc6d3b368
+InfiltratorOS OVMF: PASS: staged InfiltratorOS Kernel 0.1.0 booted to the VM test initramfs
+InfiltratorOS OVMF: VM evidence retained in: /Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD
+InfiltratorOS OVMF: No live /System/Kernel, EFI partition, NVRAM or running kernel was changed.
+```
+
+**What this newly proves:** The exact previously checksum-verified, locally
+compiled InfiltratorOS Kernel `0.1.0` image passed a **real QEMU/OVMF virtual
+boot** using the verified published Boot `0.1.39` EFI executable and
+independently installed `/System/Filesystems/FAT16.so`. The guest booted
+through the FAT16.so filesystem adapter and the Linux EFI-stub handoff to
+the generated test initramfs, and emitted the expected marker. The Boot
+test harness also checks that the disposable FAT16 media was not mutated.
+This is execution evidence, exceeding all previous source-contract, build,
+packaging, staging and static kernel-preflight qualifications.
+
+**Important remaining limits:** The running Mint kernel was never replaced.
+This was **not** an installed InfiltratorOS boot, native filesystem-root mount,
+hardware-targeted driver/module loading, native kernel module ABI conversion
+or Secure Boot test. `7.0.14-infiltrator` remains the compiled transitional
+Linux-origin ABI. Do not describe this as a fully native, independent kernel
+runtime or as physical boot qualification.
+
+**Preserve evidence:** The test log and QEMU disposable EFI, FAT16, NVRAM
+and initramfs artefacts remain locally under
+`/Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD/`.
+The original build packages, source object tree and staging area must remain
+untouched. This GitHub record persists the verified user-terminal evidence
+and tool provenance, but does **not** upload the large local binaries or
+QEMU image files. Repeating this passed virtual test is not the next
+necessary action.
+
+**Next engineering boundary:** Qualify the transitional Linux-compatible
+runtime further in disposable VMs (at minimum module loading and read/write
+root filesystem capability, with controlled recovery), before planning any
+real-machine boot or native ABI migration. Boot/Setup integration and the
+canonical single-.so kernel filesystem bridge remain distinct, unfinished
+objectives.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
