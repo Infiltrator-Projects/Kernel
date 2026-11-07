@@ -231,6 +231,60 @@ but is separate from actual kernel installation/boot qualification. Further
 work should proceed bottom-up to reconcile module ABI identity, loader and Boot
 handoff, not by renaming internal Linux symbols in the already-built package.
 
+## Verified staged artifact integrity — Latitude 5550, 2026-11-07
+
+After the successful first native `0.1.0` staging, Shannon ran the following
+**read-only** verification against the actual on-disk artifacts:
+
+```bash
+stage=/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0
+( cd "$stage" && sha256sum --quiet -c SHA256SUMS.txt ) &&
+echo "Staged checksum verification: PASS" &&
+cat "$stage/STAGING-STATUS.txt" &&
+du -sh "$stage/System/Kernel/"*
+```
+
+It completed successfully and printed `Staged checksum verification: PASS`.
+The `STAGING-STATUS.txt` evidence identifies
+`product=InfiltratorOS Kernel`, `product_version=0.1.0`,
+`kernel_release=7.0.14-infiltrator`,
+`transitional_module_abi=7.0.14-infiltrator`,
+`module_namespace=System/Kernel/Modules/InfiltratorOS-0.1.0`,
+`staging_location=Temporary`,
+`runtime_status=transitional-not-bootable`,
+`source_image_package=infiltratoros-kernel-image-0.1.0_0.1.0-1_amd64.deb`,
+and `boot_install=not-performed`, `host_install=not-performed`,
+`secure_boot=not-qualified`,
+`module_runtime_path=not-integrated`, and
+`filesystem_provider_modules=not-included`.
+
+On-disk `du -sh` output: `Images=26M`, `Modules=645M`,
+`Filesystems=4.0K`, `Firmware=4.0K`. The latter two are
+**empty, intentionally reserved directories**; their existence does not
+mean filesystem providers or firmware were installed. The module tree
+contains the currently broad Linux-compatible module set, not yet a
+hardware-qualified, minimal native driver set.
+
+**Milestone closed:** InfiltratorOS Kernel `0.1.0` compiled, packaged,
+uninstalled-native-staged and checksum-verified on the actual laptop.
+This verification proves **staged artifact integrity**, not ELF/EFI-stub
+bootability, initramfs or filesystem-root handoff, runtime module loading,
+Secure Boot, firmware qualification or successful boot.
+
+**Next integration boundary, evaluated from Boot repository:** Boot
+already owns the firmware-stage handoff and contains an existing OVMF
+Linux EFI-stub + initramfs test harness
+(`Infiltrator-Projects/Boot/tests/test_so_boot.py`) and separate physical
+Dell boot evidence in `Boot/docs/VALIDATION.md`. Those results apply to
+the kernel/images specifically tested there; they **do not qualify this new
+InfiltratorOS Kernel `0.1.0` image**. The next bottom-up integration task
+is a controlled, non-installed QEMU/OVMF handoff test using the exact
+checksum-verified staged image plus a compatible test initramfs, with explicit
+proof of an initramfs marker and preserved current host boot. Before such a
+test, verify the staged kernel configuration enables the necessary x86 EFI
+stub and initramfs support. Do not deploy or boot the compiled kernel on
+the physical host as a shortcut.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
