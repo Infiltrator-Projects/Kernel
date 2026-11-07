@@ -41,6 +41,10 @@ echo "PASS: certificate input handling preserves available keys and reports miss
 # Native kernel staging must honour the InfiltratorOS /System/Kernel contract.
 bash tests/native-contract.sh
 
+# The native Debian generator uses independent InfiltratorOS package names and
+# component versions while preserving the exact kernel/module ABI as metadata.
+bash tests/package-identity.sh
+
 # Certificate path changes must propagate to generated Kbuild auto.conf.
 bash tests/effective-certificates.sh
 
