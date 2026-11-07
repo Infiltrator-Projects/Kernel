@@ -285,6 +285,40 @@ test, verify the staged kernel configuration enables the necessary x86 EFI
 stub and initramfs support. Do not deploy or boot the compiled kernel on
 the physical host as a shortcut.
 
+## EFI-stub readiness preflight — verified on Latitude 5550, 2026-11-07
+
+Shannon ran the following **read-only** commands against the exact already
+checksum-verified native-staged Kernel 0.1.0 image from a Linux Mint shell:
+
+```bash
+stage=/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0
+grep -E '^CONFIG_(EFI|EFI_STUB|BLK_DEV_INITRD)=' "$stage/System/Kernel/Images/InfiltratorOS-0.1.0.config"
+file "$stage/System/Kernel/Images/InfiltratorOS-0.1.0.img"
+```
+
+The reported config contains `CONFIG_BLK_DEV_INITRD=y`, `CONFIG_EFI=y`,
+and `CONFIG_EFI_STUB=y`. The binary was identified by `file` as a
+`Linux kernel x86 boot executable bzImage`, compiled as
+`7.0.14-infiltrator` on Saturday 2026-11-07 20:00:04 AEDT.
+
+**Result:** This is successful **static EFI/EFI-stub/initramfs configuration
+preflight** of the staged artifact. It is **not** an observed virtual or
+physical boot, an EFI handoff, successful initramfs execution, native module
+loading, Secure Boot verification, or independence from the underlying
+Linux kernel ABI.
+
+**Next runtime test:** Reuse the existing `Infiltrator-Projects/Boot`
+`tests/test_so_boot.py` harness, which accepts a `--kernel` path and
+builds a disposable FAT16 image, test initramfs and OVMF/QEMU runtime. Pass
+the **exact staged InfiltratorOS-0.1.0.img** as `--kernel`, alongside
+locally verified Boot EFI and FAT16.so artifacts, BusyBox and OVMF images.
+Keep a unique output under `/Temporary/InfiltratorOS/Kernel/Tests/`.
+An assertion of its `BOOT-FAT16-SO-LINUX-PASS` marker plus an unchanged
+FAT16 image hash will qualify only the specific **virtual**
+Boot-to-initramfs path. Boot's previous OVMF test results for other kernel
+images do not qualify this one. Never alter a live ESP, /boot, NVRAM,
+boot order, kernel modules or host root just to run this test.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
