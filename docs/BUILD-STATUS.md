@@ -450,6 +450,62 @@ real-machine boot or native ABI migration. Boot/Setup integration and the
 canonical single-.so kernel filesystem bridge remain distinct, unfinished
 objectives.
 
+## PRESERVE THE FIRST BOOT MILESTONE BEFORE FURTHER DEVELOPMENT — 2026-11-07
+
+Shannon explicitly requested that the confirmed full build, compiled
+binaries and real successful FAT16.so/Boot 0.1.39 virtual-boot evidence
+**not be lost**. The GitHub repo contains source, scripts and the recorded
+test proof, but it does **not** contain the large local `.deb` files,
+compiled modules, staged binary image or OVMF disk images. Some of that
+evidence is under `/Temporary/InfiltratorOS` and therefore **must not be
+the sole remaining binary copy**. The source is already committed on the
+single `main` branch; no new branch/PR is required.
+
+New first-party command:
+`scripts/infiltrator/preserve-milestone.sh`, with an automated synthetic
+regression at `tests/preserve-milestone.sh` run through `make check`.
+It takes verified inputs from the first success:
+
+- Existing complete historical `~/Kernel/dist/` build output (three native
+  `0.1.0` packages, earlier baseline and any old staging outputs).
+- Exact SHA-256-verified `0.1.0` staging directory under
+  `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/`.
+- Actual confirmed successful virtual-machine test evidence under
+  `/Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD/`,
+  including Boot release artefacts, virtual disk media, test log and serial log.
+- Available original `~/Kernel-build-next.log` and
+  `~/Kernel-build-native-0.1.0.log`, current `main` commit identity,
+  and independent complete archive SHA-256 manifest.
+
+Archives are **separately copied**, not moved, to
+`~/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0/`.
+The archive is finalised only after checksum verification; it cannot
+overwrite a pre-existing archive, nor does it delete source files, change
+installed kernel/boot configuration, modify EFI/NVRAM, or rebuild anything.
+The synthetic regression tests identity, manifest verification, refusal
+to overwrite, and unchanged originals. A previous interrupted copy
+remains visibly marked `.Incomplete` rather than being mistaken for
+a fully verified archive.
+
+**Next actual laptop command — not yet reported executed:**
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/preserve-milestone.sh \
+  --evidence /Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD
+```
+
+Do **not** claim the second durable binary copy exists until the laptop
+prints `InfiltratorOS Kernel archive: PASS` and gives the final path.
+This remains a backup on the **same physical laptop**, not off-device
+protection from drive loss; GitHub independently holds the full source.
+Do not clean `dist/` or `/Temporary/InfiltratorOS` afterwards.
+
+Once the binary backup is confirmed, the next kernel engineering milestone
+is **isolated QEMU runtime module-loading and read/write root-filesystem
+qualification**, and later deliberate Boot/Setup and single canonical
+filesystem `.so` bridge integration. The validated OVMF initramfs handoff
+should be retained as a golden regression rather than needlessly repeated.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
