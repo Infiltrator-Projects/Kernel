@@ -109,14 +109,29 @@ s=$(awk '$1=="SUBLEVEL" {print $3;exit}' "$source_dir/Makefile")
 base="$v.$p.$s"
 matches_running "$source_dir" || fail "Source tree does not match installed source package $pkg=$ver"
 log "Upstream kernel code: $base (distribution ABI: $running)"
-obj="$work/obj"; mkdir -p "$obj"
+# Earlier releases were called as a Kbuild recipe and inherited
+# sub_make_done=1. Kbuild consequently ignored O= and compiled in the source
+# directory. These objects are valuable and must not be silently deleted.
+# Continue that *existing* in-tree build until the baseline is qualified;
+# new, clean checkouts continue to use .native-build/obj as intended.
+obj="$work/obj"
+mkdir -p "$obj"
+if [[ -f "$source_dir/.config" && -f "$source_dir/include/config/auto.conf" ]]; then
+  obj="$source_dir"
+  log "Reusing existing in-source compilation objects left by the previous wrapper; no clean or rebuild requested"
+fi
+if [[ "$obj" == "$source_dir" ]]; then
+  kbuild_args=(-C "$source_dir" LOCALVERSION=-infiltrator)
+else
+  kbuild_args=(-C "$source_dir" O="$obj" LOCALVERSION=-infiltrator)
+fi
 cp "$config" "$obj/.config"
 # Vendor kernel configurations may reference private/distribution-supplied
 # certificate files not carried in the published source package. Never edit
 # the installed /boot config or fabricate a certificate to satisfy Kbuild.
 bash "$root/scripts/infiltrator/prepare-certificates.sh" "$source_dir" "$obj"
 log "Configuring with the running distro defaults"
-bash "$root/scripts/infiltrator/run-kbuild.sh" -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator olddefconfig
+bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
 # A fresh kernel make is required at every stage: the outer `make build-only`
 # exports sub_make_done=1, which suppresses Kbuild's first-pass O= parsing.
 # The run-kbuild helper clears this inherited marker so our object directory
@@ -126,17 +141,21 @@ bash "$root/scripts/infiltrator/run-kbuild.sh" -C "$source_dir" O="$obj" LOCALVE
 # syncconfig subtarget directly on every kernel revision. The package step
 # recursively runs Kbuild; it must see the same certificate options we checked.
 log "Preparing Kbuild's generated configuration and headers"
-bash "$root/scripts/infiltrator/run-kbuild.sh" -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator prepare
+bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" prepare
 bash "$root/scripts/infiltrator/verify-certificate-config.sh" "$source_dir" "$obj" "$obj/.config"
-release=$(bash "$root/scripts/infiltrator/run-kbuild.sh" -s --no-print-directory -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator kernelrelease)
+release=$(bash "$root/scripts/infiltrator/run-kbuild.sh" -s --no-print-directory "${kbuild_args[@]}" kernelrelease)
 [[ "$release" == *infiltrator* && "$release" != "$running" ]] || fail "Kernel release suffix is not distinct: $release"
 log "Generated kernel release: $release"
 if [[ "$mode" == --configure-only ]]; then log "Configured at $obj/.config"; exit 0; fi
 log "Building Debian packages using $jobs jobs; NO kernel install or reboot"
-bash "$root/scripts/infiltrator/run-kbuild.sh" -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator -j "$jobs" bindeb-pkg
+bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" -j "$jobs" bindeb-pkg
 count=0
 : > "$out/SHA256SUMS.txt"
-for deb in "$work"/*.deb; do
+# bindeb-pkg places generated .debs in the parent of the active objtree:
+# .native-build for O= builds, or the parent of the source tree for legacy
+# in-tree builds. Scan only this build's actual output directory.
+packages_dir=$(dirname "$obj")
+for deb in "$packages_dir"/*.deb; do
   [[ -f "$deb" ]] || continue
   name=$(dpkg-deb -f "$deb" Package)
   case "$name" in linux-image-*infiltrator*|linux-headers-*infiltrator*) ;; *) continue ;; esac
@@ -145,7 +164,9 @@ for deb in "$work"/*.deb; do
   count=$((count+1))
 done
 (( count > 0 )) || fail "Build completed but no distinct Infiltrator .deb was found"
+printf '%s\n' "$obj" > "$work/last-completed-objtree"
 {
+ echo "object_tree=$obj"
  echo "running_kernel=$running"
  echo "source_package=$pkg"
  echo "source_version=$ver"
