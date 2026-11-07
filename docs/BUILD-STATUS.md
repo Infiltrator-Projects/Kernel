@@ -596,6 +596,62 @@ renaming module ABI directories or changing existing proven binaries.
 Do not claim full native filesystem compliance merely because one
 `System/Kernel` extraction tree is correctly named.
 
+## Home-directory Debian build debris identified — 2026-11-07
+
+A review of the exact Kernel build wrapper confirmed that its early successful
+**in-source** Kbuild object tree was `~/Kernel`, with package output
+parent `/home/ssmith` because Kbuild's `bindeb-pkg` writes Debian
+products into the directory **beside the object tree**. The existing
+wrapper then copied selected compiled `.deb` files to
+`/Temporary/InfiltratorOS/Kernel/Packages/` or historical
+`~/Kernel/dist/` but did not prevent the upstream generator itself
+from leaving `.deb`, `.changes`, and `.buildinfo` files in Home.
+**This was a real native-layout defect**, not simply a cosmetic naming issue.
+It is separate from the confirmed successful native staging and virtual boot.
+
+**Source safeguard now committed:** `scripts/build-native.sh` explicitly
+refuses future `--build-only` invocations when Kbuild package output would
+be written directly to `$HOME` or `/`. It does so before configuring,
+compiling or packaging, preserving the existing build state. Future builds
+must use an explicitly configured isolated object tree under
+`/Temporary/InfiltratorOS/Kernel/Build/`; do not assume reusing the
+historic in-source objects can be made safe merely by renaming output files.
+
+**Non-destructive home inventory and opt-in relocation committed:**
+`scripts/infiltrator/audit-home-artifacts.sh` examines only **regular
+files at the top level of Home**, accepts exact InfiltratorOS 0.1.0 and
+`7.0.14-infiltrator` Debian package filenames **and matching internal
+Debian package names**, plus exact InfiltratorOS package metadata. It
+shows an unmodified preview by default and separately reports Linux-looking
+files it cannot confidently attribute, without moving them.
+`--relocate` requires the already completed, verified
+`~/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0/` source
+snapshot. It relocates only approved items into a **new**
+`~/InfiltratorOS-Kernel-Archive/HistoricalHomeOutputs-0.1.0/` sibling
+and SHA-256-verifies them. It does **not** mutate the golden archive,
+the compiled source/object tree, the kernel image, host /System, or the
+proven QEMU evidence; any unclassified files are left untouched.
+
+**Actual clean-up has NOT been performed on Shannon's laptop yet.**
+Read-only inventory after `git pull --ff-only`:
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/audit-home-artifacts.sh
+```
+
+After confirming the approved names match generated kernel output, explicitly
+relocate them without deleting:
+
+```bash
+cd ~/Kernel && bash scripts/infiltrator/audit-home-artifacts.sh --relocate
+```
+
+If other home items remain, inspect their actual filenames and provenance
+before taking action. Avoid `rm`, `git clean`, `make clean`,
+`mv ~/linux-*`, or blanket housekeeping operations. The separately
+verified archive is user-owned long-term preservation rather than native
+kernel runtime layout; an off-device backup remains outstanding.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
