@@ -14,7 +14,7 @@ CONFIG
 printf 'CONFIG_MODULES=y\n' > "$testdir/.config"
 (
   cd "$testdir"
-  env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=7.0.14-infiltrator \
+  env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=0.1.0-infiltrator \
     srctree="$root" KCONFIG_CONFIG="$testdir/.config" \
     INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.0 \
     sh "$root/scripts/package/mkdebian"
@@ -26,8 +26,8 @@ grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0' "$control"
 grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0-dbg' "$control"
 grep -Fxq 'Package: infiltratoros-kernel-headers-0.1.0' "$control"
 grep -Fxq 'XB-X-InfiltratorOS-Kernel-Version: 0.1.0' "$control"
-grep -Fxq 'XB-X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control"
-[[ $(grep -Fc 'XB-X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control") -eq 3 ]]
+grep -Fxq 'XB-X-InfiltratorOS-Module-ABI: 0.1.0-infiltrator' "$control"
+[[ $(grep -Fc 'XB-X-InfiltratorOS-Module-ABI: 0.1.0-infiltrator' "$control") -eq 3 ]]
 
 # A source debian/control check alone was insufficient: dpkg-gencontrol
 # silently removed the earlier X- fields before the compiled .deb was built.
@@ -42,7 +42,7 @@ mkdir -p "$testdir/debian/$binary_package/DEBIAN"
 cp "$testdir/generated-binary-control" "$testdir/debian/$binary_package/DEBIAN/control"
 dpkg-deb --build "$testdir/debian/$binary_package" "$testdir/native-identity.deb" >/dev/null
 [[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Kernel-Version) == 0.1.0 ]]
-[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Module-ABI) == 7.0.14-infiltrator ]]
+[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Module-ABI) == 0.1.0-infiltrator ]]
 ! grep -Eq '^Package: linux-(image|headers|libc-dev)' "$control"
 head -n1 "$changelog" | grep -Fq 'infiltratoros-kernel (0.1.0-2)'
 grep -Fq 'infiltratoros-kernel-image-%' "$root/scripts/package/debian/rules"
