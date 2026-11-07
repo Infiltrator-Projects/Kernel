@@ -69,6 +69,10 @@ install_linux_image () {
 		done
 		[ -n "$module_src" ] || { echo >&2 "Native image has no modules for ${KERNELRELEASE}"; exit 1; }
 		mv "$module_src" "${native_root}/Modules/InfiltratorOS-${native_version}"
+		# Remove only now-empty Kbuild package-staging ancestors. Otherwise
+		# even empty /lib directories would leak into the installable .deb.
+		rmdir "${pdir}/lib/modules" "${pdir}/lib" 2>/dev/null || :
+		rmdir "${pdir}/usr/lib/modules" "${pdir}/usr/lib" "${pdir}/usr" 2>/dev/null || :
 		rm -f "${native_root}/Modules/InfiltratorOS-${native_version}/build" \
 			"${native_root}/Modules/InfiltratorOS-${native_version}/source"
 		cp "$(${MAKE} -s -f ${srctree}/Makefile image_name)" \
@@ -249,4 +253,17 @@ linux-libc-dev)
 linux-headers-*|infiltratoros-kernel-headers-*)
 	install_kernel_headers "${package}";;
 esac
+
+# A native package has exactly two top-level packaging entries: /System
+# (installed payload) and DEBIAN (dpkg control, not installed). Refuse
+# accidental leaked /boot, /lib, /usr and any future legacy payloads.
+if [ "$native_mode" -eq 1 ]; then
+	for entry in "debian/$package"/*; do
+		[ -e "$entry" ] || continue
+		case "${entry##*/}" in
+			System|DEBIAN) ;;
+			*) echo >&2 "Native package would install unsupported directory: $entry"; exit 1 ;;
+		esac
+	done
+fi
 
