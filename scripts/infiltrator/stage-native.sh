@@ -64,7 +64,12 @@ release=$(cat "$objects/include/config/kernel.release")
 [[ -f "$objects/.config" ]] || fail 'Kernel build configuration is missing'
 packages=$(cd "$packages" && pwd -P)
 objects=$(cd "$objects" && pwd -P)
-mkdir -p "$(dirname "$output")"
+if ! mkdir -p "$(dirname "$output")"; then
+  if [[ "$output" == "$native_workspace/Staging/"* ]]; then
+    fail "Cannot create native staging workspace under $native_workspace. This is a directory permission issue, not a kernel build failure. A system administrator can provision only that Kernel directory for your account: sudo install -d -m 0750 -o \"$(id -un)\" -g \"$(id -gn)\" \"$native_workspace\". Do not run this staging script with sudo or change ownership of the shared /Temporary/InfiltratorOS parent."
+  fi
+  fail "Cannot create staging parent: $(dirname "$output")"
+fi
 output=$(cd "$(dirname "$output")" && pwd -P)/$(basename "$output")
 [[ "$output" != / && "$output" != /System* && "$output" != /boot* ]] || fail 'Refusing to stage directly on the installed host'
 [[ "$output" != "$packages" && "$output" != "$objects" ]] || fail 'Output must not replace the build inputs'
