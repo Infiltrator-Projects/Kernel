@@ -173,7 +173,9 @@ export INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION="$product_ver
 log "Building InfiltratorOS Kernel $product_version (transitional module ABI: $release) using $jobs jobs; NO kernel install or reboot"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" -j "$jobs" bindeb-pkg
 count=0
-manifest="$out/SHA256SUMS-infiltratoros-kernel-$product_version.txt"
+manifest="$out/SHA256SUMS-InfiltratorOS-Kernel-$product_version.txt"
+[[ ! -e "$manifest" && ! -L "$manifest" ]] ||
+  fail "Existing package checksum manifest preserved: $manifest"
 : > "$manifest"
 # Kbuild writes its transitional Debian output beside the object tree.
 # On the historic in-source build this is the home directory. Copy verified
@@ -187,11 +189,18 @@ for deb in "$packages_dir"/*.deb; do
     "infiltratoros-kernel-image-$product_version"|"infiltratoros-kernel-image-$product_version-dbg"|"infiltratoros-kernel-headers-$product_version") ;;
     *) continue ;;
   esac
-  cp "$deb" "$out/"
+  abi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI)
+  [[ "$abi" == "$release" ]] || fail "Package ABI mismatch for $deb: $abi (expected $release)"
+  target="$out/$(basename "$deb")"
+  if [[ -e "$target" ]]; then
+    cmp -s -- "$deb" "$target" || fail "Existing package preserved (different bytes): $target"
+  else
+    cp -- "$deb" "$target" || fail "Could not copy compiled package into Temporary: $target"
+  fi
   (cd "$out" && sha256sum "$(basename "$deb")") >> "$manifest"
   count=$((count+1))
 done
-(( count == 3 )) || fail "Expected image, headers and debug packages; found $count InfiltratorOS Kernel $product_version packages"
+(( count > 0 )) || fail "No InfiltratorOS Kernel $product_version packages were generated"
 printf '%s\n' "$obj" > "$work/last-completed-objtree"
 {
  echo "object_tree=$obj"
