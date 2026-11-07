@@ -8,22 +8,36 @@ log() { printf 'Kernel stage: %s\n' "$*" >&2; }
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 component_version=$(tr -d '\r\n' < "$root/VERSION")
 [[ "$component_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Kernel stage: ERROR: invalid component VERSION" >&2; exit 1; }
-packages="$root/dist"
-objects="$root/.native-build/obj"
+temporary_root=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
+[[ "$temporary_root" == /* && "$temporary_root" != / ]] || fail "Invalid native Temporary root: $temporary_root"
+native_workspace="$temporary_root/Kernel"
+packages="$native_workspace/Packages"
+if [[ ! -d "$packages" && -d "$root/dist" ]]; then
+  # Existing first-build products stay usable, but no new files are added
+  # to the historical dist/ directory.
+  packages="$root/dist"
+  log "Reading preserved legacy packages from $packages"
+fi
+objects="$native_workspace/Build/obj"
+if [[ ! -f "$objects/include/config/kernel.release" && -d "$root/.native-build/obj" ]]; then
+  objects="$root/.native-build/obj"
+fi
 # Older builds compiled in-source because their parent `make` exported
 # sub_make_done. The build writes its successfully completed objtree here,
 # allowing native staging to use the actual image/config/System.map without
 # discarding the saved compiler outputs or assuming a newer out-of-tree build.
-if [[ -f "$root/.native-build/last-completed-objtree" ]]; then
-  IFS= read -r saved_objects < "$root/.native-build/last-completed-objtree" || :
+for record in "$native_workspace/Build/last-completed-objtree" "$root/.native-build/last-completed-objtree"; do
+  [[ -f "$record" ]] || continue
+  IFS= read -r saved_objects < "$record" || :
   case "$saved_objects" in
-    "$root"|"$root/.native-build/obj") objects="$saved_objects" ;;
-    *) echo "Kernel stage: ERROR: unexpected saved object directory: $saved_objects" >&2; exit 1 ;;
+    "$root"|"$root/.native-build/obj"|"$native_workspace/Build/obj")
+      objects="$saved_objects"; break ;;
+    *) fail "Unexpected recorded object directory: $saved_objects" ;;
   esac
-fi
+done
 # Stage into a distinct product-versioned tree, preserving the successful
 # transitional binary baseline in dist/native/ untouched.
-output="$root/dist/native-$component_version"
+output="$native_workspace/Staging/InfiltratorOS-$component_version"
 replace_existing=0
 while (( $# )); do
   case "$1" in
@@ -96,9 +110,11 @@ for prefix in lib usr/lib; do
   fi
 done
 if [[ -n "$module_path" ]]; then
-  mkdir -p "$tmp/result/System/Kernel/Modules/$release"
+  # Native namespace is product-versioned. Module internals remain Linux-
+  # compatible pending a qualified native loader; exact ABI is metadata only.
+  mkdir -p "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version"
   rsync -a --exclude='/build' --exclude='/source' "$module_path/" \
-    "$tmp/result/System/Kernel/Modules/$release/"
+    "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version/"
 fi
 # The two reserved namespaces must remain format-owner controlled.
 cat > "$tmp/result/STAGING-STATUS.txt" <<TEXT
@@ -110,6 +126,9 @@ boot_install=not-performed
 host_install=not-performed
 secure_boot=not-qualified
 module_runtime_path=not-integrated
+module_namespace=System/Kernel/Modules/InfiltratorOS-$component_version
+staging_location=Temporary
+runtime_status=transitional-not-bootable
 filesystem_provider_modules=not-included
 source_image_package=$(basename "${images[0]}")
 TEXT
@@ -128,5 +147,6 @@ if ! mv -- "$tmp/result" "$output"; then
   if [[ -d "$tmp/previous" ]]; then mv -- "$tmp/previous" "$output"; fi
   fail 'Could not publish staged native tree'
 fi
-log "Staged InfiltratorOS Kernel $component_version (module ABI: $release) under $output/System/Kernel/"
+log "Staged InfiltratorOS Kernel $component_version under $output/System/Kernel/"
+log "The inherited module ABI remains in STAGING-STATUS.txt, not the native directory names"
 log 'Not installed; no boot configuration, system files or running kernel were modified.'
