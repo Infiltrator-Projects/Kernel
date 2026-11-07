@@ -147,6 +147,57 @@ cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/stage-native.sh --
 
 If access still fails, inspect `namei -l /Temporary/InfiltratorOS/Kernel` for parent traversal restrictions; do not change ownership of `/Temporary` or `/Temporary/InfiltratorOS` blindly. The staging script now reports targeted permissions guidance. Never run the entire build or staging as root merely to bypass this error, nor delete/clean any compiled artifacts.
 
+## Latest host result — old native .deb omitted the optional ABI control field
+
+On 2026-11-07, after successfully provisioning
+`/Temporary/InfiltratorOS/Kernel` with
+`sudo install -d -m 0750 -o "$(id -un)" -g "$(id -gn)" /Temporary/InfiltratorOS/Kernel`,
+Shannon fast-forwarded to `9551cc86c` and tried
+`bash scripts/infiltrator/stage-native.sh --packages "$PWD/dist"`.
+This failed **before extracting or staging packages**, with:
+
+```text
+Kernel stage: ERROR: Native image package ABI () does not match built kernel (7.0.14-infiltrator)
+```
+
+**Verified root cause:** The second fully compiled InfiltratorOS Kernel 0.1.0
+packages were generated with custom `X-InfiltratorOS-Module-ABI` and
+`X-InfiltratorOS-Kernel-Version` fields in source `debian/control`.
+`dpkg-gencontrol` does not copy plain custom `X-` fields to binary
+package controls, so `dpkg-deb -f <package> X-InfiltratorOS-Module-ABI`
+returns empty. The first synthetic test only inspected the source control,
+not the generated binary .deb control; that was the test coverage gap.
+
+**Source corrections committed:** Future packaging uses Debian's
+`XB-X-InfiltratorOS-Module-ABI` and
+`XB-X-InfiltratorOS-Kernel-Version` source fields, which
+`dpkg-gencontrol` copies to binary package controls as
+`X-InfiltratorOS-Module-ABI` and
+`X-InfiltratorOS-Kernel-Version` (verified experimentally using the
+real `dpkg-gencontrol`/`dpkg-deb` tools). The new test uses those real
+tools and reads fields back from the resulting `.deb`.
+**Existing already built binaries will not be edited or rebuilt merely
+to add these optional metadata fields.** The staging script now tolerates
+absent custom binary ABI metadata **only after validating an exact**
+`/boot/vmlinuz-7.0.14-infiltrator` and
+`/lib/modules/7.0.14-infiltrator/` **containing loadable .ko files** inside
+the package. Explicit incorrect metadata still causes failure, as does a
+missing/mismatched payload. ABI identity inside the actual modules remains
+unchanged and is not renamed.
+
+**Immediate safe action after the latest tests pass:**
+
+```bash
+cd ~/Kernel && git pull --ff-only && make check && bash scripts/infiltrator/stage-native.sh --packages "$PWD/dist"
+```
+
+Expected uninstalled staging under
+`/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/System/Kernel/`,
+**without installing a kernel, rebooting, cleaning, deleting, or altering
+the preserved source/compiler output or successful package binaries.**
+If the staging destination already exists, the script refuses to overwrite
+it without explicit confirmation.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
