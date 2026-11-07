@@ -1,28 +1,29 @@
-# Kernel
+# InfiltratorOS Kernel
 
-InfiltratorOS kernel project.
+This repository contains the **complete Ubuntu Linux HWE 7.0 kernel source**
+used as the initial InfiltratorOS kernel baseline. It is maintained directly
+in the repository root, not inside a subdirectory or as a download-only wrapper.
 
-**Current state:** Native Linux-kernel baseline, not yet a standalone operating-system kernel. The complete Linux source has NOT yet been committed to this repository.
+Initial source: Ubuntu linux-hwe-7.0 7.0.0-42.42~24.04.1, including the
+distribution's source patch set. See [baseline provenance](docs/upstream/BASELINE.md).
+The original Linux kernel COPYING and LICENSES/ notices remain applicable.
 
-The initial builder supports **Debian and Linux Mint** using the running kernel's configuration and the exact kernel source package identified by its installed headers. It compiles locally with distribution defaults, creates separately named Debian packages, and never installs a kernel or changes a boot entry.
+**Current status:** This is an InfiltratorOS-maintained Linux kernel baseline,
+not yet an independently implemented kernel. It has not yet passed native
+Mint/Debian compilation and boot qualification.
 
-## Commands
+Boot is maintained in Infiltrator-Projects/Boot. Format-specific filesystem
+engines remain owned by their independent Filesystem-* repositories.
 
-    git pull --ff-only
-    make probe
-    make configure-only
-    make build-only
+## Native builder
 
-For an already extracted source tree:
+- `make probe` checks the host and installed source configuration.
+- `make configure-only` configures an out-of-tree build using Mint/Debian defaults.
+- `make build-only` compiles local Debian image and header packages, without installation.
+- `make check` checks the first-party build script syntax and contract (not the kernel).
 
-    bash scripts/build-native.sh --build-only --source-dir upstream/linux-hwe-7.0-7.0.0 --skip-deps
-
-The builder installs source-package build dependencies using APT/sudo unless --skip-deps is requested. Source repositories (deb-src) must be enabled on the host; the builder never silently edits repository policy. Offline or native-InfiltratorOS builds will require a separate toolchain/provisioning contract.
-
-Kernel source belongs in src/linux/ when formally imported into Git, preserving original licence and history/provenance. Downloads in upstream/, builds in .native-build/ and packages in dist/ are local and excluded from Git.
-
-## Ownership
-
-Boot owns firmware selection and kernel handoff. Kernel owns CPU, memory, scheduling, processes and runtime generic module loading. Independent Filesystem-* repositories own their filesystem engines; InfiltratorOS owns OS integration. Linux kernel source licensing/attribution must be preserved. Build tooling has GPL-3.0-or-later headers.
-
-**Not yet qualified:** a full successful kernel compilation, Debian/Mint hardware boot, native filesystem .so kernel bridge, installation/recovery, or complete upstream Linux source import. A script passing syntax tests does not prove these milestones.
+The first-party scripts use APT build dependencies on Debian/Linux Mint
+and need the appropriate deb-src entries. They do not change the running
+kernel or boot configuration. The first-party builder is
+`scripts/build-native.sh`. The Linux kernel's normal Kbuild targets
+remain available.
