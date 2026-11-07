@@ -27,7 +27,8 @@ printf 'authoritative userspace module\n' > "$sandbox/System/Filesystems/FAT16.s
 old_sha=$(sha256sum "$sandbox/System/Filesystems/FAT16.so" | cut -d ' ' -f 1)
 INFILTRATOROS_MODULE_VIEW_ROOT="$view" "$runtime/modprobe" prepare > "$sandbox/out" 2>&1
 [[ -s "$view/current/lib/modules/$abi/modules.dep.bin" ]]
-[[ -L "$view/current/lib/modules/$abi/kernel/drivers/test/native_test.ko" ]]
+[[ -L "$view/current/lib/modules/$abi/kernel" ]]
+[[ -f "$view/current/lib/modules/$abi/kernel/drivers/test/native_test.ko" ]]
 [[ -L "$view/current/lib/modules/$abi/updates/infiltrator-filesystems/native_provider.ko" ]]
 [[ ! -e "$view/current/lib/modules/$abi/updates/infiltrator-filesystems/stale_provider.ko" ]]
 INFILTRATOROS_MODULE_VIEW_ROOT="$view" "$runtime/modprobe" resolve native_test > "$sandbox/dep"

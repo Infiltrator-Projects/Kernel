@@ -18,7 +18,7 @@ firmware_root="$kernel_root/Firmware"
 runtime_root=${INFILTRATOROS_MODULE_VIEW_ROOT:-/run/infiltratoros-kernel}
 [[ "$runtime_root" == /* && "$runtime_root" != / && ! -L "$runtime_root" ]] || fail 'Invalid runtime view root'
 [[ -d "$module_root/kernel" && ! -L "$module_root" ]] || fail "Native module tree missing: $module_root"
-for command_name in depmod modprobe modinfo find ln mktemp; do
+for command_name in depmod modprobe modinfo find ln mktemp xargs; do
   command -v "$command_name" >/dev/null || fail "Missing native runtime dependency: $command_name"
 done
 # Only a running InfiltratorOS kernel can have its kernel module helper set.
@@ -38,18 +38,24 @@ prepare() {
   target="$staging/lib/modules/$release"
   mkdir -p -- "$target"
   declare -A names=()
-  while IFS= read -r -d '' file; do
-    relative=${file#"$module_root/"}
-    basename=${file##*/}
-    vermagic=$(modinfo -F vermagic "$file") || fail "Cannot inspect compiled module: $file"
+  # Validate all core module vermagic values in batches, avoiding thousands
+  # of modinfo processes during the first kernel module request.
+  local check_file="$staging/vermagic.txt"
+  find "$module_root/kernel" -type f \( -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' -o -name '*.ko.gz' \) -print0 |
+    xargs -0 -r -n 64 modinfo -F vermagic > "$check_file" ||
+    fail 'One or more native kernel modules failed vermagic inspection'
+  while IFS= read -r vermagic; do
     abi=${vermagic%% *}
-    [[ "$abi" == "$release" ]] || fail "Kernel module $relative has ABI '$abi', expected '$release'"
-    names["${basename%%.ko*}"]=1
-    mkdir -p -- "$target/$(dirname "$relative")"
-    ln -s -- "$file" "$target/$relative"
+    [[ "$abi" == "$release" ]] || fail "Kernel module has ABI '$abi', expected '$release'"
     core_count=$((core_count + 1))
-  done < <(find "$module_root/kernel" -type f \( -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' -o -name '*.ko.gz' \) -print0)
+  done < "$check_file"
   (( core_count > 0 )) || fail 'Compiled kernel has no usable .ko modules'
+  while IFS= read -r basename; do
+    names["${basename%%.ko*}"]=1
+  done < <(find "$module_root/kernel" -type f \( -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' -o -name '*.ko.gz' \) -printf '%f\n')
+  # Keep the core module hierarchy intact, with only one directory symlink.
+  # depmod traverses it, but writes indexes solely into the /run view.
+  ln -s -- "$module_root/kernel" "$target/kernel"
   for item in modules.order modules.builtin modules.builtin.modinfo; do
     if [[ -f "$module_root/$item" ]]; then
       ln -s -- "$module_root/$item" "$target/$item"
