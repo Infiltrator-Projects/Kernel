@@ -32,6 +32,38 @@ This is a Linux-derived transitional kernel, not yet an independently implemente
 - The generic kernel adapter to consume the independent canonical filesystem `.so` is not implemented/qualified; transitional `.ko` modules are not final native filesystem support.
 - **Off-machine binary backup is NOT confirmed.** Both original artifacts and their verified archive are on the Latitude 5550's storage. GitHub holds the source and evidence, not those large `.deb` packages or virtual disk images.
 
+## Backup target inventory — 2026-11-07 (read-only host evidence)
+
+Shannon ran `lsblk -o NAME,TRAN,TYPE,SIZE,FSTYPE,LABEL,MOUNTPOINTS`
+on the Mint Latitude 5550. The machine currently reports:
+
+- `mmcblk0` 119.1G, `TRAN=mmc`, with 21 test-format partitions
+  (including FAT, exFAT, NTFS, EXT2/3/4, Btrfs, HFS, ZFS and APFS).
+  **Do not touch** as a backup target; it is filesystem-test media.
+- `nvme0n1` 1.9T main internal drive: mounted ext4 root
+  `nvme0n1p2` (800G), `/boot/efi` (512M), swap, and the
+  `nvme0n1p5` 1T `infiltratorfs` partition. Never format,
+  mount or write the filesystem-test partition as a backup shortcut.
+  The golden archives currently live on this machine's storage.
+- `nvme1n1` 238.5G **separate NVMe**, principally an unmounted
+  `nvme1n1p2` 237.6G NTFS partition plus existing auxiliary
+  partitions. No evidence it is empty or authorized for use.
+  **Do not mount read-write, write, partition or format** until its
+  ownership and contents are confirmed.
+- The inventory shows **no clearly connected USB storage or mounted
+  external destination**. Network mounts were not assessed by this
+  command; no off-machine backup has been proven.
+
+**Actual next step:** Ask Shannon to identify and connect a suitable
+external storage device, or identify an approved network share. Use a
+read-only storage listing again, confirm the exact safe target and
+capacity against `du -sh ~/InfiltratorOS-Kernel-Archive`, then
+copy/check the entire verified archive without modifying any current
+disk partitions or original files. Do not mistake a second internal
+NVMe for an off-machine backup. Continue native Kernel runtime work
+after the independently verified copy is complete; the original QEMU
+milestone is already preserved and must not be rebuilt needlessly.
+
 ## Next action — protect the actual binaries
 
 **Do not compile or clean anything.** Identify an independently mounted removable disk or remote filesystem:
