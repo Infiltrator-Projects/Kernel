@@ -134,6 +134,19 @@ if [[ -f "$source_dir/.config" && -f "$source_dir/include/config/auto.conf" ]]; 
   obj="$source_dir"
   log "Reusing existing in-source compilation objects; no clean or rebuild requested"
 fi
+# bindeb-pkg writes .deb, .changes and .buildinfo next to the
+# Kbuild object tree. When that tree is the repository ~/Kernel itself,
+# Kbuild writes directly into ~/ and pollutes the user's home directory.
+# The first completed milestone is already preserved; never do another
+# packaging run that targets the user's home. A future isolated object
+# build must be configured deliberately without moving or cleaning the
+# proven in-source baseline.
+if [[ "$mode" == --build-only ]]; then
+  package_parent=$(dirname "$obj")
+  if [[ "$package_parent" == "$HOME" || "$package_parent" == / ]]; then
+    fail "Refusing kernel package output in $package_parent. The old in-source build is preserved; use an isolated /Temporary/InfiltratorOS/Kernel/Build object tree for a NEW build. No compilation or package operation started."
+  fi
+fi
 mkdir -p "$obj"
 if [[ "$obj" == "$source_dir" ]]; then
   kbuild_args=(-C "$source_dir" LOCALVERSION=-infiltrator)
