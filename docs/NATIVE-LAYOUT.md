@@ -10,6 +10,32 @@ are **InfiltratorOS**. Do not bulk-rename internal kernel symbols, filesystem
 paths, ABI names or original copyright/licence records: Linux-origin names may
 remain required for functional or legal reasons until individually migrated.
 
+## Architecture goal: InfiltratorOS, with Linux compatibility
+
+**InfiltratorOS is intended to become an independently engineered operating
+system with its own kernel identity, release numbering, build and installation
+structure. Linux compatibility is a supported interface, not the identity
+or long-term architectural authority of InfiltratorOS.**
+
+- The **current stage** is a fork of Linux/Ubuntu kernel source. It remains a
+  Linux-derived implementation and retains original copyright, licence and
+  provenance obligations. Do not represent it as independently implemented.
+- The **destination** is an InfiltratorOS-owned kernel with its own kernel
+  release identity and native `/System/Kernel` layout, progressively replacing
+  inherited mechanisms. Linux interoperability is maintained through
+  deliberately implemented, qualified compatibility interfaces such as
+  system calls, ELF loading and relevant Linux UAPI behaviours.
+- **`7.0.14-infiltrator` is transitional**: it is an exact kernel/module ABI
+  identifier inherited from the current source, not the InfiltratorOS product
+  version or permanent required kernel version scheme. A native ABI numbering
+  scheme must be tested with kernel, modules, loader, Boot and Setup before
+  replacement.
+- Linux **application** compatibility does not automatically guarantee that
+  arbitrary Linux `.ko` drivers are binary compatible. Module interoperability
+  is a separate engineering and qualification concern.
+- Linux-origin API names and licence/provenance notices can be retained where
+  required. This does not imply the finished OS must identify as Linux.
+
 ## Version identities and transition
 
 Keep these identities separate:
