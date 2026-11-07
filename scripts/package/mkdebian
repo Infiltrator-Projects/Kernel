@@ -188,7 +188,24 @@ debug_package=linux-image-${KERNELRELEASE}-dbg
 if [ "${INFILTRATOROS_NATIVE_PACKAGE:-0}" = 1 ]; then
   native_identity=1
   product_version=${INFILTRATOROS_KERNEL_VERSION:-}
-  printf '%s\n' "$product_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+
+  printf '%s\n' "$product_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
+    echo >&2 'InfiltratorOS packaging requires a semantic component version'
+    exit 1
+  }
+  sourcename=infiltratoros-kernel
+  packageversion=${product_version}-1
+  packagename=infiltratoros-kernel-image
+  release_suffix=$product_version
+  header_package=infiltratoros-kernel-headers-${product_version}
+  debug_package=infiltratoros-kernel-image-${product_version}-dbg
+  homepage=https://github.com/Infiltrator-Projects/Kernel
+  image_description="InfiltratorOS kernel image, component version ${product_version}"
+  image_details=" InfiltratorOS kernel image and modules, independently versioned.
+ Transitional module ABI: ${KERNELRELEASE}."
+  headers_description="InfiltratorOS kernel headers, component version ${product_version}"
+  debug_description="InfiltratorOS kernel debugging symbols, version ${product_version}"
+fi
+image_package=${packagename}-${release_suffix}
 
 debarch=
 set_debarch
