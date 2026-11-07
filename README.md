@@ -1,5 +1,7 @@
 # InfiltratorOS Kernel
 
+**Development handoff / current build status:** [docs/BUILD-STATUS.md](docs/BUILD-STATUS.md). It records the original source identity, local Mint test baseline, unresolved build blockers, and exact recovery commands. This is not a qualified bootable release.
+
 This repository contains the **complete Ubuntu Linux HWE 7.0 kernel source**
 used as the initial InfiltratorOS kernel baseline. It is maintained directly
 in the repository root, not inside a subdirectory or as a download-only wrapper.
