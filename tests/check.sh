@@ -43,3 +43,8 @@ bash tests/native-contract.sh
 
 # Certificate path changes must propagate to generated Kbuild auto.conf.
 bash tests/effective-certificates.sh
+
+# The first-party wrapper must restart Kbuild outside its parent's recursive sentinel.
+bash -n scripts/infiltrator/run-kbuild.sh
+grep -Fq 'unset sub_make_done' scripts/infiltrator/run-kbuild.sh
+[[ $(grep -Fc 'bash "$root/scripts/infiltrator/run-kbuild.sh"' scripts/build-native.sh) -eq 4 ]]
