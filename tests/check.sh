@@ -37,3 +37,6 @@ printf 'CONFIG_SYSTEM_TRUSTED_KEYS="%s/existing.pem"\n' "$testdir" > "$testdir/.
 bash scripts/infiltrator/prepare-certificates.sh "$PWD" "$testdir"
 grep -Fxq "CONFIG_SYSTEM_TRUSTED_KEYS=\"$testdir/existing.pem\"" "$testdir/.config"
 echo "PASS: certificate input handling preserves available keys and reports missing distro keys"
+
+# Native kernel staging must honour the InfiltratorOS /System/Kernel contract.
+bash tests/native-contract.sh
