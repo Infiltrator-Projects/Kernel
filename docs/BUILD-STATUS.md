@@ -726,6 +726,46 @@ future native `/System/Kernel` installation-layout changes and must
 not be confused with their completion. Never use a blanket home cleanup,
 delete kernel build objects or reinstall the saved baseline.
 
+## Home-directory Kbuild output cleanup completed — actual terminal evidence, 2026-11-07
+
+Shannon fast-forwarded `main` to `43576375b` and successfully ran:
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/audit-home-artifacts.sh
+cd ~/Kernel && bash scripts/infiltrator/audit-home-artifacts.sh --relocate-upstream-remainder
+```
+
+The read-only preview reported **zero** remaining original approved
+InfiltratorOS/Linux-image files and precisely **three** independently
+matched upstream files: `linux-libc-dev_7.0.14-g8541848fe2d7-4_amd64.deb`,
+`linux-upstream_7.0.14-g8541848fe2d7-4_amd64.buildinfo`, and
+`linux-upstream_7.0.14-g8541848fe2d7-4_amd64.changes`.
+
+The relocation then printed `MOVED AND VERIFIED` for **all three** and
+reported:
+
+```text
+Kernel home audit: PASS: identified files moved out of Home into /home/ssmith/InfiltratorOS-Kernel-Archive/HistoricalHomeOutputs-0.1.0/UpstreamRemainder
+Kernel home audit: Existing 0.1.0 verified archive, native staged kernel, VM evidence, unrelated home files and host installation were not modified.
+```
+
+Together with the previously proven eight-file relocation, this closes
+**all 11 identified loose top-level Kbuild/packaging outputs** on the host.
+No file was deleted: the original eight are in
+`~/InfiltratorOS-Kernel-Archive/HistoricalHomeOutputs-0.1.0/`
+and the verified three-file remainder is in its `UpstreamRemainder/` child.
+The separately saved **golden first-boot milestone archive**
+`~/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0/` is immutable and
+unaffected, as are the still-staged kernel image and QEMU boot evidence.
+
+**Do not rerun either relocation step**, because completed archive paths
+are deliberately protected against overwriting. The namespace conversion
+of the actual Debian installable payload from `/boot`, `/lib/modules`
+and `/usr/src` into qualified native `/System/Kernel` remains a
+**separate unfinished engineering task**, and the binary artifacts are
+**not yet backed up off the laptop**. This successful cleanup does not
+claim either of those tasks is complete.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
