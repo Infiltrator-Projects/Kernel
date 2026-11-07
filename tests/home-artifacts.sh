@@ -36,12 +36,12 @@ Description: Not this kernel build
 EOF
 dpkg-deb --build "$sandbox/pkg" "$home/linux-image-another-project_1.0.0_amd64.deb" >/dev/null
 before=$(find "$home" -maxdepth 1 -type f -printf '%f\n' | sort)
-HOME="$home" INFILTRATOROS_TEMP_ROOT="$temporary" bash scripts/infiltrator/audit-home-artifacts.sh > "$sandbox/Preview.log"
+HOME="$home" INFILTRATOROS_TEMP_ROOT="$temporary" bash scripts/infiltrator/audit-home-artifacts.sh > "$sandbox/Preview.log" 2>&1
 after=$(find "$home" -maxdepth 1 -type f -printf '%f\n' | sort)
 [[ "$before" == "$after" ]]
 grep -Fq 'APPROVED' "$sandbox/Preview.log"
 grep -Fq 'UNCLASSIFIED' "$sandbox/Preview.log"
-HOME="$home" INFILTRATOROS_TEMP_ROOT="$temporary" bash scripts/infiltrator/audit-home-artifacts.sh --relocate > "$sandbox/Moved.log"
+HOME="$home" INFILTRATOROS_TEMP_ROOT="$temporary" bash scripts/infiltrator/audit-home-artifacts.sh --relocate > "$sandbox/Moved.log" 2>&1
 dest="$home/InfiltratorOS-Kernel-Archive/HistoricalHomeOutputs-$version"
 [[ -s "$home/Personal.txt" && -s "$home/linux-image-another-project_1.0.0_amd64.deb" ]]
 [[ -s "$dest/infiltratoros-kernel-image-${version}_0.1.0-1_amd64.deb" ]]
