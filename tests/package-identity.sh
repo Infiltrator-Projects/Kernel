@@ -44,12 +44,21 @@ dpkg-deb --build "$testdir/debian/$binary_package" "$testdir/native-identity.deb
 [[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Kernel-Version) == 0.1.0 ]]
 [[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Module-ABI) == 7.0.14-infiltrator ]]
 ! grep -Eq '^Package: linux-(image|headers|libc-dev)' "$control"
-head -n1 "$changelog" | grep -Fq 'infiltratoros-kernel (0.1.0-1)'
+head -n1 "$changelog" | grep -Fq 'infiltratoros-kernel (0.1.0-2)'
 grep -Fq 'infiltratoros-kernel-image-%' "$root/scripts/package/debian/rules"
 grep -Fq 'infiltratoros-kernel-headers-%' "$root/scripts/package/debian/rules"
 grep -Fq 'infiltratoros-kernel-image-*' "$root/scripts/package/builddeb"
 grep -Fq 'infiltratoros-kernel-headers-*' "$root/scripts/package/builddeb"
 grep -Fq 'version=${KERNELRELEASE}' "$root/scripts/package/builddeb"
+# The real native Debian generator must produce payloads for the native
+# /System/Kernel namespace, not traditional /boot, /lib/modules or /usr/src.
+sh -n "$root/scripts/package/builddeb"
+grep -Fq 'if [ "$native_mode" -eq 1 ]; then' "$root/scripts/package/builddeb"
+grep -Fq 'native_root="${pdir}/System/Kernel"' "$root/scripts/package/builddeb"
+grep -Fq 'System/Kernel/Headers/InfiltratorOS-' "$root/scripts/package/builddeb"
+grep -Fq 'System/Kernel/Debug/InfiltratorOS-' "$root/scripts/package/builddeb"
+grep -Fq 'packageversion=${product_version}-2' "$root/scripts/package/mkdebian"
+
 
 # Default mode must still generate upstream Linux names (for compatibility
 # with direct Kbuild and non-InfiltratorOS users of the imported source).
