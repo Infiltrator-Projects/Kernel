@@ -52,8 +52,10 @@ define binary
 	$(Q)dh_testroot $(DH_OPTIONS)
 	$(Q)dh_prep $(DH_OPTIONS)
 	$(Q)+$(MAKE) $(make-opts) run-command KBUILD_RUN_COMMAND='+$$(srctree)/scripts/package/builddeb $(package)'
-	$(Q)dh_installdocs $(DH_OPTIONS)
-	$(Q)dh_installchangelogs $(DH_OPTIONS)
+	# Native kernel packages must not create /usr/share/doc; the entire
+	# installed filesystem payload is owned by /System/Kernel exclusively.
+	$(if $(filter 1,$(INFILTRATOROS_NATIVE_PACKAGE)),,$(Q)dh_installdocs $(DH_OPTIONS))
+	$(if $(filter 1,$(INFILTRATOROS_NATIVE_PACKAGE)),,$(Q)dh_installchangelogs $(DH_OPTIONS))
 	$(Q)dh_compress $(DH_OPTIONS)
 	$(Q)dh_fixperms $(DH_OPTIONS)
 	$(Q)dh_gencontrol $(DH_OPTIONS) -- -f$(call mk-files,$@)
