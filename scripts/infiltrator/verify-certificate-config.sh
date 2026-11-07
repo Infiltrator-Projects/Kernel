@@ -17,8 +17,33 @@ value() {
   local key=$1 file=$2
   sed -n "s/^CONFIG_${key}=\"\\(.*\\)\"$/\\1/p" "$file" | head -n 1
 }
+# Kconfig only exports *active* options to auto.conf. The saved .config
+# may still contain a string default for a symbol whose dependencies are off.
+# Comparing that dormant default with a missing auto.conf entry is a false
+# positive. Conversely, an active setting must be generated and must match.
+enabled() {
+  grep -Fqx "CONFIG_$1=y" "$auto_config"
+}
+active_setting() {
+  case "$1" in
+    SYSTEM_TRUSTED_KEYS) enabled SYSTEM_TRUSTED_KEYRING ;;
+    SYSTEM_REVOCATION_KEYS) enabled SYSTEM_REVOCATION_LIST ;;
+    MODULE_SIG_KEY)
+      enabled MODULE_SIG ||
+        { enabled IMA_APPRAISE_MODSIG && enabled MODULES; } ;;
+    *) return 1 ;;
+  esac
+}
 for key in SYSTEM_TRUSTED_KEYS SYSTEM_REVOCATION_KEYS MODULE_SIG_KEY; do
   configured=$(value "$key" "$config_file")
+  if ! grep -q "^CONFIG_${key}=" "$auto_config"; then
+    if active_setting "$key"; then
+      printf 'Kernel: ERROR: active %s is absent from generated auto.conf\n' "$key" >&2
+      exit 1
+    fi
+    # Inactive values from the host config are not used to build the kernel.
+    continue
+  fi
   generated=$(value "$key" "$auto_config")
   if [[ "$configured" != "$generated" ]]; then
     printf 'Kernel: ERROR: stale generated Kbuild configuration for %s\n' "$key" >&2
@@ -27,7 +52,8 @@ for key in SYSTEM_TRUSTED_KEYS SYSTEM_REVOCATION_KEYS MODULE_SIG_KEY; do
   fi
   case "$key" in
     MODULE_SIG_KEY)
-      # Kbuild may create its default local signing certificate during build.
+      # Kbuild generates the ordinary local signing key if requested;
+      # it need not exist before the build starts.
       [[ "$generated" != "certs/signing_key.pem" && "$generated" != pkcs11:* ]] || continue ;;
   esac
   [[ -n "$generated" ]] || continue
