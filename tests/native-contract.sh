@@ -25,7 +25,8 @@ printf 'CONFIG_TEST=y\n' > "$sandbox/obj/.config"
 dpkg-deb --build "$sandbox/pkg" "$sandbox/packages/fake.deb" >/dev/null
 bash scripts/infiltrator/stage-native.sh --packages "$sandbox/packages" --objects "$sandbox/obj" --output "$sandbox/native"
 [[ -s "$sandbox/native/System/Kernel/Images/InfiltratorOS-0.1.0.img" ]]
-[[ -s "$sandbox/native/System/Kernel/Modules/$release/kernel/drivers/test.ko" ]]
+[[ -s "$sandbox/native/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/test.ko" ]]
+[[ ! -e "$sandbox/native/System/Kernel/Modules/$release" ]]
 [[ -d "$sandbox/native/System/Kernel/Filesystems" ]]
 [[ -d "$sandbox/native/System/Kernel/Firmware" ]]
 [[ ! -e "$sandbox/native/boot" && ! -e "$sandbox/native/lib" ]]
@@ -58,5 +59,8 @@ bash scripts/infiltrator/stage-native.sh --packages "$sandbox/packages" --object
 grep -Fxq 'native image' "$sandbox/native-0.1.0/System/Kernel/Images/InfiltratorOS-0.1.0.img"
 grep -Fxq 'product_version=0.1.0' "$sandbox/native-0.1.0/STAGING-STATUS.txt"
 grep -Fxq "transitional_module_abi=$release" "$sandbox/native-0.1.0/STAGING-STATUS.txt"
+grep -Fxq 'staging_location=Temporary' "$sandbox/native-0.1.0/STAGING-STATUS.txt"
+[[ -s "$sandbox/native-0.1.0/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/test.ko" ]]
+[[ ! -e "$sandbox/native-0.1.0/System/Kernel/Modules/$release" ]]
 ( cd "$sandbox/native-0.1.0" && sha256sum -c SHA256SUMS.txt >/dev/null )
 echo 'PASS: native product version/ABI identity, legacy package fallback, checksums and preservation'
