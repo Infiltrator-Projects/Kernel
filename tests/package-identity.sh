@@ -25,9 +25,24 @@ grep -Fxq 'Source: infiltratoros-kernel' "$control"
 grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0' "$control"
 grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0-dbg' "$control"
 grep -Fxq 'Package: infiltratoros-kernel-headers-0.1.0' "$control"
-grep -Fxq 'X-InfiltratorOS-Kernel-Version: 0.1.0' "$control"
-grep -Fxq 'X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control"
-[[ $(grep -Fc 'X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control") -eq 3 ]]
+grep -Fxq 'XB-X-InfiltratorOS-Kernel-Version: 0.1.0' "$control"
+grep -Fxq 'XB-X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control"
+[[ $(grep -Fc 'XB-X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control") -eq 3 ]]
+
+# A source debian/control check alone was insufficient: dpkg-gencontrol
+# silently removed the earlier X- fields before the compiled .deb was built.
+# Exercise the REAL Debian binary-control generation and read back the .deb.
+binary_package=infiltratoros-kernel-image-0.1.0
+mkdir -p "$testdir/debian/$binary_package/DEBIAN"
+(
+  cd "$testdir"
+  dpkg-gencontrol "-p$binary_package" "-Pdebian/$binary_package" -O \
+    > "$testdir/generated-binary-control"
+)
+cp "$testdir/generated-binary-control" "$testdir/debian/$binary_package/DEBIAN/control"
+dpkg-deb --build "$testdir/debian/$binary_package" "$testdir/native-identity.deb" >/dev/null
+[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Kernel-Version) == 0.1.0 ]]
+[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Module-ABI) == 7.0.14-infiltrator ]]
 ! grep -Eq '^Package: linux-(image|headers|libc-dev)' "$control"
 head -n1 "$changelog" | grep -Fq 'infiltratoros-kernel (0.1.0-1)'
 grep -Fq 'infiltratoros-kernel-image-%' "$root/scripts/package/debian/rules"
@@ -50,4 +65,4 @@ cp "$testdir/include/config/auto.conf" "$testdir/legacy/include/config/auto.conf
 grep -Fxq 'Package: linux-image-7.0.14-infiltrator' "$testdir/legacy/debian/control"
 grep -Fxq 'Package: linux-headers-7.0.14-infiltrator' "$testdir/legacy/debian/control"
 ! grep -Fq 'Package: infiltratoros-kernel-' "$testdir/legacy/debian/control"
-echo 'PASS: native Debian image/headers/debug packages use component version, while transitional Linux ABI remains metadata'
+echo 'PASS: native Debian image/headers/debug identity and verified dpkg-gencontrol binary ABI fields'
