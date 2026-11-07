@@ -240,8 +240,8 @@ for deb in "$packages_dir"/*.deb; do
   abi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI)
   [[ "$abi" == "$release_id" ]] || fail "Package ABI mismatch for $deb: $abi (expected $release_id)"
   if (( fresh_objects )); then
-    [[ $(dpkg-deb -f "$deb" Version) == "$product_version-2" ]] ||
-      fail "Fresh build yielded wrong package revision; expected $product_version-2: $deb"
+    [[ $(dpkg-deb -f "$deb" Version) == "$product_version-3" ]] ||
+      fail "Fresh build yielded wrong package revision; expected $product_version-3: $deb"
   fi
   target="$out/$(basename "$deb")"
   if [[ -e "$target" ]]; then
