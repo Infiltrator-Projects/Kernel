@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Verify the real Kbuild Debian generator's identity, without compiling a kernel.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd -P)
+testdir=$(mktemp -d)
+trap 'rm -rf -- "$testdir"' EXIT
+mkdir -p "$testdir/include/config"
+cat > "$testdir/include/config/auto.conf" <<'CONFIG'
+CONFIG_MODULES=y
+CONFIG_DEBUG_INFO=y
+CONFIG_64BIT=y
+CONFIG
+printf 'CONFIG_MODULES=y\n' > "$testdir/.config"
+(
+  cd "$testdir"
+  env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=7.0.14-infiltrator \
+    srctree="$root" KCONFIG_CONFIG="$testdir/.config" \
+    INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.0 \
+    sh "$root/scripts/package/mkdebian"
+)
+control="$testdir/debian/control"
+changelog="$testdir/debian/changelog"
+grep -Fxq 'Source: infiltratoros-kernel' "$control"
+grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0' "$control"
+grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0-dbg' "$control"
+grep -Fxq 'Package: infiltratoros-kernel-headers-0.1.0' "$control"
+grep -Fxq 'X-InfiltratorOS-Kernel-Version: 0.1.0' "$control"
+grep -Fxq 'X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control"
+[[ $(grep -Fc 'X-InfiltratorOS-Module-ABI: 7.0.14-infiltrator' "$control") -eq 3 ]]
+! grep -Eq '^Package: linux-(image|headers|libc-dev)' "$control"
+head -n1 "$changelog" | grep -Fq 'infiltratoros-kernel (0.1.0-1)'
+grep -Fq 'infiltratoros-kernel-image-%' "$root/scripts/package/debian/rules"
+grep -Fq 'infiltratoros-kernel-headers-%' "$root/scripts/package/debian/rules"
+grep -Fq 'infiltratoros-kernel-image-*' "$root/scripts/package/builddeb"
+grep -Fq 'infiltratoros-kernel-headers-*' "$root/scripts/package/builddeb"
+grep -Fq 'version=${KERNELRELEASE}' "$root/scripts/package/builddeb"
+
+# Default mode must still generate upstream Linux names (for compatibility
+# with direct Kbuild and non-InfiltratorOS users of the imported source).
+mkdir -p "$testdir/legacy/include/config"
+cp "$testdir/include/config/auto.conf" "$testdir/legacy/include/config/auto.conf"
+(
+  cd "$testdir/legacy"
+  env -u INFILTRATOROS_NATIVE_PACKAGE -u INFILTRATOROS_KERNEL_VERSION \
+    ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=7.0.14-infiltrator \
+    srctree="$root" KCONFIG_CONFIG="$testdir/.config" \
+    sh "$root/scripts/package/mkdebian"
+)
+grep -Fxq 'Package: linux-image-7.0.14-infiltrator' "$testdir/legacy/debian/control"
+grep -Fxq 'Package: linux-headers-7.0.14-infiltrator' "$testdir/legacy/debian/control"
+! grep -Fq 'Package: infiltratoros-kernel-' "$testdir/legacy/debian/control"
+echo 'PASS: native Debian image/headers/debug packages use component version, while transitional Linux ABI remains metadata'
