@@ -180,5 +180,13 @@ done
 ) || fail 'New native packages failed checksum validation'
 [[ ! -e "$final" && ! -L "$final" ]] || fail "Existing packages preserved: $final"
 mv -T "$work/release" "$final" || fail 'Could not publish new native package set'
+# The 1.6 GiB debug-symbol unpacking step creates a large scratch copy. After
+# successful verification and atomic publication, delete ONLY the unique
+# mktemp scratch directory belonging to this invocation. Retain on failure.
+case "$work" in
+  "$out_parent"/.InfiltratorOS-"$version"-native.Incomplete.*) ;;
+  *) fail "Refusing to clean unexpected temporary directory: $work" ;;
+esac
+rm -rf -- "$work"
 log "PASS: three native /System/Kernel-only revision -2 packages: $final"
 log 'Original compiled binaries, historical packages, proven first-boot archives and Mint remain untouched.'
