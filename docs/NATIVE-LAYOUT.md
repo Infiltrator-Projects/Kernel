@@ -80,6 +80,47 @@ compilation/packaging qualification.** Its generator and staging contracts
 are checked independently in CI. Do not erase or replace the successful
 transitional binary baseline.
 
+## Important: transitional staging is not the intended native kernel layout
+
+The first compiled image and three Debian packages have been produced on the
+Mint test machine, and a versioned source-first staging implementation exists.
+**However, the present staged tree is only a transitional compatibility
+artifact, not proof of the final InfiltratorOS kernel layout or runtime.**
+
+Today `stage-native.sh` unpacks a Linux-ABI package and copies the entire
+inherited `/lib/modules/<upstream-module-abi>/kernel/...` subtree into
+`/System/Kernel/Modules/<upstream-module-abi>/kernel/...`. This includes
+unrelated distribution drivers and inherited filesystem modules. A new
+InfiltratorOS prefix and image filename do **not** make those modules native,
+hardware-selected, or decoupled from Linux Kbuild/module-loading. The
+`<upstream-module-abi>` directory is still required for the current compiled
+modules' vermagic and Linux loader compatibility; it is **not** our future
+product version or native kernel ABI. Do not disguise this mismatch by merely
+renaming the directory or modifying vermagic.
+
+**The OS filesystem contract is owned by
+[InfiltratorOS/docs/FILESYSTEM.md](https://github.com/Infiltrator-Projects/InfiltratorOS/blob/main/docs/FILESYSTEM.md)
+and
+[InfiltratorOS/docs/FILESYSTEM_SO_RUNTIME_CONTRACT.md](https://github.com/Infiltrator-Projects/InfiltratorOS/blob/main/docs/FILESYSTEM_SO_RUNTIME_CONTRACT.md):**
+the final single per-format engine is an independently maintained `.so`
+under `/System/Filesystems/`, shared conceptually among BOOT, OS kernel and
+applications via a **future proven generic adapter/loader**. Format-specific
+`.ko` under `/System/Kernel/Filesystems/` is a **transitional Linux adapter**,
+not the end-state driver model. This Kernel repository must not take ownership
+of the per-format filesystem engines, nor silently relocate inherited `.ko`
+files into the independent provider namespace. A generic kernel bridge capable
+of consuming the canonical format engine has **not** been implemented or
+qualified. Kernel-space execution cannot simply load a normal userspace
+`.so` without an appropriate architecture and privilege boundary.
+
+Native completion requires hardware-appropriate module selection, independent
+version/ABI identity, qualified Boot/Setup handoff, a working native
+module loader, correct driver and filesystem provider ownership, and runtime
+mount/boot tests. Until those milestones, call this **compatibility staging**,
+not a final native filesystem layout. The verified compiled baseline and
+`dist/native/` tree must be preserved; do not clean or rename live module
+paths while new Debian packaging is being produced.
+
 ## Native artifact layout
 
 This follows the existing InfiltratorOS authority:
