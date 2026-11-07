@@ -78,7 +78,7 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 
 15. **Verified on the actual Mint test laptop:** after Git fast-forward to `8541848fe`, the user ran `bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$PWD" "$PWD/.config"` in `~/Kernel`; it returned `Kernel: Effective compilation certificate settings verified (no missing distro PEMs).` with exit success. This confirms the certificate preflight against the generated in-source configuration on that machine. **It is not evidence that the complete kernel compiled, packaged or booted.** The next step is to resume the incremental native package build with full logging: `set -o pipefail && make build-only SKIP_DEPS=1 JOBS=10 2>&1 | tee "$HOME/Kernel-build-next.log"`. Preserve the existing in-source object files and do not run any clean target.
 
-. The output names shown include `linux-image-7.0.14-infiltrator_7.0.14-g8541848fe2d7-4_amd64.deb` and the corresponding `linux-image-7.0.14-infiltrator-dbg` package. The builder counted a third matching package, expected to be headers, but its exact filename has not yet been reported. The local build log is `~/Kernel-build-next.log`; the packages were copied to `~/Kernel/dist/`. No kernel installation, activation, boot test, or native stage verification has occurred.
+16. **FIRST SUCCESSFUL FULL KERNEL PACKAGE BUILD — verified in the Mint terminal, 2026-11-07.** `make build-only SKIP_DEPS=1 JOBS=10` completed kernel linking, module signing and dependency generation, and the Debian package build chain (`dpkg-deb`, `dpkg-genbuildinfo`, `dpkg-genchanges`, `dpkg-source --after-build`). The terminal returned to its prompt following `Kernel: Created 3 kernel .deb package(s) in dist/. No kernel was installed.` The generated image was `linux-image-7.0.14-infiltrator_7.0.14-g8541848fe2d7-4_amd64.deb`; the debug package was also observed. The exact third package filename has not been supplied. The log is `~/Kernel-build-next.log` and packages are in `~/Kernel/dist/`. This proves build/package completion, not installation or boot.
 
 17. **FIRST SUCCESSFUL NATIVE STAGING — verified by user terminal, 2026-11-07.** On the same Latitude 5550, after `git pull --ff-only`, `make stage-native` printed `Kernel stage: Unpacking locally compiled package: linux-image-7.0.14-infiltrator_7.0.14-g8541848fe2d7-4_amd64.deb`, `Kernel stage: Staged InfiltratorOS kernel 7.0.14-infiltrator under /home/ssmith/Kernel/dist/native/System/Kernel/`, then `Kernel stage: Not installed; no boot configuration, system files or running kernel were modified.` The shell returned normally. That proves **staging completed successfully** (the checksum-generation step is part of this stage). No boot, install or runtime compatibility test has yet occurred.
 
@@ -86,24 +86,32 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 
 18. **Native product package identities implemented and regression-tested in GitHub, 2026-11-07.** After the successful staging, the first-party `scripts/build-native.sh` now opts into a native mode in `scripts/package/mkdebian`. It generates *real Debian control and source metadata*, not renamed filenames: source package `infiltratoros-kernel`, package version `0.1.0-1`, image `infiltratoros-kernel-image-0.1.0`, headers `infiltratoros-kernel-headers-0.1.0`, and debug `infiltratoros-kernel-image-0.1.0-dbg`. `scripts/package/debian/rules` and `scripts/package/builddeb` recognise the native names. The existing exact kernel/module ABI `7.0.14-infiltrator` remains used for `/boot/vmlinuz-<ABI>`, modules, headers and module signing and is independently recorded in `X-InfiltratorOS-Module-ABI`. The native staging script now produces `InfiltratorOS-0.1.0.img`, `.config`, `.map`, keeps module ABI subdirectory and refuses to overwrite previous staging unless explicitly requested. Native staging defaults to `dist/native-0.1.0`, so the earlier `dist/native` baseline is preserved. A synthetic test exercises actual `mkdebian` generation, names, version and ABI metadata and protects upstream default mode; staging tests exercise old/new package selection, checksums and overwrite protection. GitHub Actions run `42356986972` **passed**. This is **source/contract test success**, not a second completed native Mint build of the new package names.
 
-**Current state (confirmed 2026-11-07):** The original full kernel build and `dist/native` staging **both succeeded** on the actual Linux Mint laptop, and their outputs are preserved. Native InfiltratorOS **package-name/version generator changes have CI-verified contracts**, but **newly named binary packages are not yet compiled or packaged on that laptop**, and no kernel has been installed or booted. The architecture destination remains a distinct InfiltratorOS kernel with deliberately supported Linux compatibility.
+19. **LOCAL PACKAGE IDENTITY AND STAGING CONTRACT VERIFICATION PASSED — user-confirmed 2026-11-07.** On the original Dell Latitude 5550, `cd ~/Kernel && git pull --ff-only && make check` fast-forwarded `main` from `c8147a547` to `12e5fad5c`, and returned to the shell successfully. Output included `PASS: syntax and CLI-contract checks`, `PASS: certificate input handling preserves available keys and reports missing distro keys`, `PASS: native product version/ABI identity, legacy package fallback, checksums and preservation`, `PASS: native Debian image/headers/debug packages use component version, while transitional Linux ABI remains metadata`, and `PASS: real Kbuild string serialization, active/missing certificate paths, and inactive defaults`. The fake/native .deb names in the staging test came from temporary synthetic test fixtures, **not a fresh native kernel package build**. The corresponding GitHub Actions run `42357184247` also completed successfully.
 
-## Next immediate action — validate new identity safely
+**Current state (confirmed 2026-11-07):** The original full kernel build and `dist/native` staging **both succeeded** on the Mint laptop, and the subsequent **native InfiltratorOS product packaging contract checks passed both on the laptop and in GitHub CI**. The new `infiltratoros-kernel-image-0.1.0` binaries have **not yet been built**. No kernel installation or boot qualification has occurred. The architectural goal is an independent InfiltratorOS kernel with deliberate Linux compatibility.
 
-On the Mint test machine, bring source up to date and run the **short,
-synthetic contract checks without recompilation**:
+## Next immediate action — build native-named binaries, preserve baseline
+
+The local `make check` and equivalent CI tests have **passed**. There is no
+reason to repeat the short tests immediately.
+
+Next, if ready to qualify the actual native Debian package production, run
+the incremental build on the same Mint host, logging separately:
 
 ```bash
-cd ~/Kernel && git pull --ff-only && make check
+cd ~/Kernel && set -o pipefail && make build-only SKIP_DEPS=1 JOBS=10 2>&1 | tee "$HOME/Kernel-build-native-0.1.0.log"
 ```
 
-If those succeed, the new real packaging identity generator and native staging
-contracts are verified on the host. **Do not automatically start another long
-kernel compile.** The subsequent optional qualification step is a separate
-incremental `make build-only SKIP_DEPS=1 JOBS=10`, which may reuse compiled
-objects but can still spend significant time generating Debian packages and
-debug symbols. Its new output must be verified before any native restaging;
-use separate `dist/native-0.1.0`, not the original `dist/native`.
+This enables the InfiltratorOS-native package generator already present in
+the current `main` checkout; the resulting image/header/debug .deb files
+should identify as InfiltratorOS Kernel `0.1.0` and carry exact transitional
+module ABI `7.0.14-infiltrator`. Compilation objects may be reused, but
+the packaging work can take substantial time. No kernel installation or
+reboot is requested. **Success must be confirmed from the terminal's
+completion and actual built package metadata, not inferred from CI.**
+
+Only after successful completion should the versioned staging target
+`dist/native-0.1.0` be created, without replacing `dist/native`.
 
 Original successful artifacts remain:
 `~/Kernel/dist/`, `~/Kernel/dist/native/`, source-tree compiler objects,
