@@ -9,8 +9,10 @@ root=$(cd "$(dirname "$0")/../.." && pwd -P)
 version=$(tr -d '\r\n' < "$root/VERSION")
 packages=
 install_root=${INFILTRATOROS_INSTALL_ROOT:-/}
+replace_existing=0
 while (( $# )); do
   case "$1" in
+    --replace-existing) replace_existing=1 ;;
     --packages|--install-root)
       opt=$1; shift; (( $# )) || fail "Missing argument for $opt"
       case "$opt" in
@@ -18,8 +20,9 @@ while (( $# )); do
         --install-root) install_root=$1 ;;
       esac ;;
     --help|-h)
-      echo 'Usage: install-native.sh --packages ABSOLUTE_DIR [--install-root /]'
+      echo 'Usage: install-native.sh --packages ABSOLUTE_DIR [--install-root /] [--replace-existing]'
       echo 'Installs three verified native /System/Kernel package payloads; does not configure or activate a bootloader.'
+      echo '--replace-existing: archive the previous same-version kernel files before repair.'
       exit 0 ;;
     *) fail "Unsupported option: $1" ;;
   esac
@@ -45,7 +48,34 @@ temp_base=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
 [[ "$temp_base" == /* && "$temp_base" != / && -d "$temp_base/Kernel" ]] ||
   fail 'Missing native /Temporary workspace'
 workspace=$(mktemp -d "$temp_base/Kernel/.NativeInstall-$version.XXXXXXXX")
-trap 'log "Temporary installation verification workspace: $workspace"' EXIT
+# An explicitly requested repair is transactional: prior same-version files
+# are moved into /Temporary and restored if the replacement cannot complete.
+rollback_needed=0
+installation_started=0
+backup_dir=
+moved_paths=()
+managed_paths=()
+installation_exit() {
+  status=$?
+  if (( status != 0 && rollback_needed )); then
+    log "Repair failed; restoring previous native kernel files from $backup_dir"
+    if (( installation_started )); then
+      for rel in "${managed_paths[@]}"; do
+        "${writer[@]}" rm -rf -- "$target/$rel" ||
+          log "WARNING: could not remove partial replacement $target/$rel"
+      done
+    fi
+    for rel in "${moved_paths[@]}"; do
+      if [[ -e "$backup_dir/$rel" || -L "$backup_dir/$rel" ]]; then
+        "${writer[@]}" install -d -m 0755 "$(dirname "$target/$rel")" &&
+        "${writer[@]}" mv -- "$backup_dir/$rel" "$target/$rel" ||
+          log "WARNING: recovery required for $rel; original remains at $backup_dir/$rel"
+      fi
+    done
+  fi
+  log "Temporary installation verification workspace: $workspace"
+}
+trap installation_exit EXIT
 mkdir -p "$workspace/unpacked" "$workspace/controls"
 abi=
 for pkg in "$image_pkg" "$header_pkg" "$debug_pkg"; do
@@ -110,20 +140,49 @@ else
   log "Installing to isolated test root $install_root (no sudo)"
   writer=()
 fi
-# Prevent overwriting any earlier native kernel files. The root may contain
-# other Filesystems/format modules which must be left strictly alone.
-for rel in \
-  "Images/InfiltratorOS-$version.img" \
-  "Images/InfiltratorOS-$version.config" \
-  "Images/InfiltratorOS-$version.map" \
-  "Modules/InfiltratorOS-$version" \
-  "Headers/InfiltratorOS-$version" \
-  "Debug/InfiltratorOS-$version"; do
-  if [[ -e "$target/$rel" || -L "$target/$rel" ]]; then
-    fail "Refusing to overwrite existing native kernel installation: $target/$rel"
+# Native kernel repair is deliberately opt-in. No unrelated filesystem
+# providers, firmware, or directories outside these six versioned paths move.
+managed_paths=(
+  "Images/InfiltratorOS-$version.img"
+  "Images/InfiltratorOS-$version.config"
+  "Images/InfiltratorOS-$version.map"
+  "Modules/InfiltratorOS-$version"
+  "Headers/InfiltratorOS-$version"
+  "Debug/InfiltratorOS-$version"
+)
+for parent in Images Modules Headers Debug; do
+  [[ ! -L "$target/$parent" ]] ||
+    fail "Refusing symlinked native installation parent: $target/$parent"
+done
+collision=0
+for rel in "${managed_paths[@]}"; do
+  [[ ! -L "$target/$rel" ]] || fail "Refusing symlinked kernel path $target/$rel"
+  if [[ -e "$target/$rel" ]]; then
+    if (( ! replace_existing )); then
+      fail "Refusing to overwrite existing native kernel installation: $target/$rel (rerun with --replace-existing to archive and repair)"
+    fi
+    collision=1
   fi
 done
+if (( collision )); then
+  backup_parent="$temp_base/Kernel/Backups"
+  mkdir -p -- "$backup_parent" || fail "Cannot create protected kernel backup parent"
+  backup_dir=$(mktemp -d "$backup_parent/InfiltratorOS-$version-previous.XXXXXXXX") ||
+    fail "Cannot create native repair backup"
+  rollback_needed=1
+  for rel in "${managed_paths[@]}"; do
+    if [[ -e "$target/$rel" ]]; then
+      mkdir -p -- "$backup_dir/$(dirname "$rel")" || fail "Cannot prepare backup for $rel"
+      moved_paths+=("$rel")
+      "${writer[@]}" mv -- "$target/$rel" "$backup_dir/$rel" ||
+        fail "Could not preserve prior installed kernel file $target/$rel"
+    fi
+  done
+  log "Preserved prior native kernel files under $backup_dir"
+fi
 "${writer[@]}" install -d -m 0755 "$target"
+installation_started=1
+
 # The checked file set is new and versioned. --ignore-existing also defends
 # against unexpected preexisting files appearing between checking and copy.
 "${writer[@]}" rsync -a --ignore-existing -- "$native/" "$target/" ||
@@ -137,6 +196,8 @@ while IFS= read -r -d '' file; do
       fail "Installed kernel file differs from compiler output: $rel"
   fi
 done < <(find "$native" -type f -print0)
+rollback_needed=0
 log "PASS: freshly compiled native Kernel $version packages installed at $target"
+if [[ -n "$backup_dir" ]]; then log "Previous native files preserved at $backup_dir"; fi
 log 'No changes to Mint /boot, /lib/modules, /usr/src, EFI, NVRAM, or running kernel.'
 log 'Boot activation, module-loader runtime and full OS boot remain separate development qualifications.'

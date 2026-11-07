@@ -34,22 +34,25 @@ fail() { printf 'InfiltratorOS Kernel .run: ERROR: %s\n' "$*" >&2; exit 1; }
 repo='https://github.com/Infiltrator-Projects/Kernel.git'
 expected_commit=__PINNED_COMMIT__
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
-  echo 'Usage: ./InfiltratorOS-Kernel-0.1.0-amd64.run [--build-only] [--jobs N] [--install-deps]'
+  echo 'Usage: ./InfiltratorOS-Kernel-0.1.0-amd64.run [--build-only] [--jobs N] [--install-deps] [--replace-existing]'
   echo 'Downloads the exact release source from GitHub into /Temporary/InfiltratorOS/Kernel.'
   echo 'Freshly compiles on THIS machine, verifies actual native Debian package paths,'
   echo 'and installs files under /System/Kernel (not under Mint /boot).'
   echo 'Does not change EFI/NVRAM or activate a new boot kernel.'
   echo '--build-only: download, compile and verify without native file installation.'
   echo '--install-deps: allow APT installation of missing build prerequisites.'
+  echo '--replace-existing: archive and replace previously installed same-version native Kernel files.'
   exit 0
 fi
 build_only=0
 install_deps=0
+replace_existing=0
 jobs=
 while (( $# )); do
   case "$1" in
     --build-only) build_only=1 ;;
     --install-deps) install_deps=1 ;;
+    --replace-existing) replace_existing=1 ;;
     --jobs)
       shift; (( $# )) || fail '--jobs requires a number'
       [[ "$1" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid --jobs value'
@@ -58,6 +61,9 @@ while (( $# )); do
   esac
   shift
 done
+if (( build_only && replace_existing )); then
+  fail '--replace-existing requires native installation, not --build-only'
+fi
 for tool in git mktemp tee dpkg-deb sha256sum rsync; do
   command -v "$tool" >/dev/null || fail "Required command not installed: $tool"
 done
@@ -153,8 +159,10 @@ if [[ -n "$jobs" ]]; then args+=(--jobs "$jobs"); fi
 ( cd "$stage" && sha256sum --quiet -c SHA256SUMS.txt ) ||
   fail "Native staged output checksum failure; see $logfile"
 if (( ! build_only )); then
+  install_args=(--packages "$packages")
+  if (( replace_existing )); then install_args+=(--replace-existing); fi
   ( cd "$source_dir" && bash scripts/infiltrator/install-native.sh \
-    --packages "$packages" ) 2>&1 | tee -a "$logfile" ||
+    "${install_args[@]}" ) 2>&1 | tee -a "$logfile" ||
     fail "Native installation failed; see $logfile"
   printf 'PASS: locally compiled Kernel installed to /System/Kernel\n'
 else

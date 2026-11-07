@@ -94,7 +94,7 @@ boot milestone is preserved as historical evidence only. The public
 installing. Actual boot activation, root-filesystem access and native
 module loading are not yet qualified. Existing host `/boot`, Linux
 modules, EFI and NVRAM are not modified by the native installer.
-Existing versioned native files are not silently overwritten.
+Existing versioned native files are not silently overwritten. To repair a previously installed same-version 0.1.0 kernel with the inherited Linux ABI, run the current small `.run` with `--replace-existing`; the installer preserves the six previous versioned native kernel paths under `/Temporary/InfiltratorOS/Kernel/Backups/` and leaves independent filesystem providers untouched. The repair flag is explicit and not accepted together with `--build-only`.
 
 See [the updated milestone and verification boundary](docs/MILESTONE-0.1.0.md)
 and [native filesystem contract](docs/NATIVE-LAYOUT.md).

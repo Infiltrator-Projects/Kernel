@@ -23,6 +23,7 @@ jobs:
           sh -n scripts/package/builddeb
           bash tests/package-identity.sh
           bash tests/native-builddeb-paths.sh
+          bash tests/install-native.sh
       - name: Package tiny GitHub source downloader (no kernel compile)
         shell: bash
         env:

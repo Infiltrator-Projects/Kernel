@@ -63,4 +63,15 @@ if INFILTRATOROS_TEMP_ROOT="$temp_root" \
   exit 1
 fi
 grep -Fq 'Refusing to overwrite existing native kernel installation' "$sandbox/reinstall.log"
-echo 'PASS: real package extraction/installation under /System/Kernel only; no overwrite, no host changes'
+# Previously published 0.1.0 packages may already occupy these paths.
+# Repair MUST require explicit approval, preserve their bytes and leave
+# independent filesystem providers unchanged.
+printf 'old wrong-ABI kernel image\n' > "$install_root/System/Kernel/Images/InfiltratorOS-$version.img"
+INFILTRATOROS_TEMP_ROOT="$temp_root" \
+  bash "$root/scripts/infiltrator/install-native.sh" \
+  --packages "$packages" --install-root "$install_root" --replace-existing
+[[ $(cat "$install_root/System/Kernel/Images/InfiltratorOS-$version.img") == 'compiled native image' ]]
+backup_file=$(find "$temp_root/Kernel/Backups" -type f -name "InfiltratorOS-$version.img" -print -quit)
+[[ -n "$backup_file" && $(cat "$backup_file") == 'old wrong-ABI kernel image' ]]
+[[ $(sha256sum "$install_root/System/Kernel/Filesystems/FAT16.ko" | cut -d' ' -f1) == "$before" ]]
+echo 'PASS: native install, explicit same-version repair backup, independent filesystem preservation'
