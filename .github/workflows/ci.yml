@@ -1,0 +1,12 @@
+name: Kernel builder contract
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check scripts (not a kernel build)
+        run: bash tests/check.sh
