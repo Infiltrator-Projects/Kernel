@@ -170,10 +170,18 @@ if [[ "$mode" == --build-only ]]; then
   fi
 fi
 mkdir -p "$obj"
+# The imported Linux source Makefile remains 7.0.14, including its
+# LINUX_VERSION_CODE and internal compatibility expectations. The independent
+# InfiltratorOS release, UTS_RELEASE and module vermagic are 0.1.0-infiltrator.
+# Do not pretend this project already has seven major versions.
+product_version=$(tr -d '\r\n' < "$root/VERSION")
+[[ "$product_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+  fail "Invalid InfiltratorOS Kernel product VERSION: $product_version"
+release_id="$product_version-infiltrator"
 if [[ "$obj" == "$source_dir" ]]; then
-  kbuild_args=(-C "$source_dir" LOCALVERSION=-infiltrator)
+  kbuild_args=(-C "$source_dir" KERNELRELEASE="$release_id")
 else
-  kbuild_args=(-C "$source_dir" O="$obj" LOCALVERSION=-infiltrator)
+  kbuild_args=(-C "$source_dir" O="$obj" KERNELRELEASE="$release_id")
 fi
 cp "$config" "$obj/.config"
 # Vendor kernel configurations may reference private/distribution-supplied
@@ -194,18 +202,23 @@ log "Preparing Kbuild's generated configuration and headers"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" prepare
 bash "$root/scripts/infiltrator/verify-certificate-config.sh" "$source_dir" "$obj" "$obj/.config"
 release=$(bash "$root/scripts/infiltrator/run-kbuild.sh" -s --no-print-directory "${kbuild_args[@]}" kernelrelease)
-[[ "$release" == *infiltrator* && "$release" != "$running" ]] || fail "Kernel release suffix is not distinct: $release"
-log "Generated kernel release: $release"
+[[ "$release" == "$release_id" && "$release" != "$running" ]] ||
+  fail "Generated kernel release '$release' does not match InfiltratorOS '$release_id'"
+[[ $(cat "$obj/include/config/kernel.release") == "$release_id" ]] ||
+  fail 'Kbuild kernel.release file does not contain the independent InfiltratorOS version'
+[[ -f "$obj/include/generated/utsrelease.h" ]] ||
+  fail 'Missing compiled UTS release header'
+grep -Fqx "#define UTS_RELEASE \"$release_id\"" "$obj/include/generated/utsrelease.h" ||
+  fail 'Compiled UTS_RELEASE still contains the imported Linux source version'
+log "Generated InfiltratorOS kernel release and module ABI: $release"
 if [[ "$mode" == --configure-only ]]; then log "Configured at $obj/.config"; exit 0; fi
-# InfiltratorOS Kernel has an independent product version; keep KERNELRELEASE
-# untouched as the current module/boot ABI. Never regenerate distro packages
-# when using a foreign source without the native packaging integration.
-product_version=$(tr -d '\r\n' < "$root/VERSION")
-[[ "$product_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Invalid InfiltratorOS Kernel product VERSION: $product_version"
+# The first-party native build uses InfiltratorOS's own release and vermagic.
+# The imported source's 7.0.14 version remains upstream provenance only;
+# never generate native packages with 7.0.14-infiltrator as their ABI.
 grep -Fq INFILTRATOROS_NATIVE_PACKAGE "$source_dir/scripts/package/mkdebian" ||
   fail "Selected upstream source has not integrated the InfiltratorOS native package generator"
 export INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION="$product_version"
-log "Building InfiltratorOS Kernel $product_version (transitional module ABI: $release) using $jobs jobs; NO kernel install or reboot"
+log "Building InfiltratorOS Kernel $product_version (kernel release/module ABI: $release; upstream source: $base) using $jobs jobs; NO kernel install or reboot"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" -j "$jobs" bindeb-pkg
 count=0
 manifest="$out/SHA256SUMS-InfiltratorOS-Kernel-$product_version.txt"
@@ -225,7 +238,7 @@ for deb in "$packages_dir"/*.deb; do
     *) continue ;;
   esac
   abi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI)
-  [[ "$abi" == "$release" ]] || fail "Package ABI mismatch for $deb: $abi (expected $release)"
+  [[ "$abi" == "$release_id" ]] || fail "Package ABI mismatch for $deb: $abi (expected $release_id)"
   if (( fresh_objects )); then
     [[ $(dpkg-deb -f "$deb" Version) == "$product_version-2" ]] ||
       fail "Fresh build yielded wrong package revision; expected $product_version-2: $deb"
@@ -254,6 +267,7 @@ fi
  echo "source_version=$ver"
  echo "kernel_release=$release"
  echo "component_version=$product_version"
+ echo "upstream_linux_source_version=$base"
  echo "config_sha256=$(sha256sum "$config" | cut -d' ' -f1)"
  echo "installed_kernel=no"
  echo "fresh_objects=$fresh_objects"
