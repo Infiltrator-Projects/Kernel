@@ -54,20 +54,31 @@ Keep these identities separate:
   compatibility, module vermagic and dependency paths, and are not the
   InfiltratorOS Kernel product release number.
 
-**Future packaging contract (not implemented yet):** the visible package
-family should use `infiltratoros-kernel`, with corresponding native headers
-and debug packages. Debian `Version` should derive from this repository's
-`VERSION`, with an appropriate package revision. The underlying kernel ABI
-must remain accessible in packaging metadata and wherever the actual module
-loader or early boot paths require it. Merely renaming a generated Debian
-package filename would leave its internal `Package` identity, dependency
-wiring and install paths wrong.
+**Native packaging implementation (added after the first successful build):**
+the first-party `make build-only` wrapper now opts into independently versioned
+Debian package generation. The intended three binary packages are:
 
-The inherited Kbuild packaging currently emits `linux-image-7.0.14-infiltrator`
-and companion packages. They are an **engineering baseline**, not the desired
-final product identity. Do not change generated packaging or kernel ABI inputs
-during an active compilation; migrate and qualify the package generator,
-header/debug links, native installer, Boot and Setup as one subsequent change.
+- `infiltratoros-kernel-image-0.1.0`
+- `infiltratoros-kernel-headers-0.1.0`
+- `infiltratoros-kernel-image-0.1.0-dbg`
+
+The Debian source package is `infiltratoros-kernel` and the Debian package
+version is `0.1.0-1`. The version comes from this repository's `VERSION`,
+not Linux's `7.0.14`. Embedded binary compatibility remains tied to the
+current transitional module release `7.0.14-infiltrator`, recorded as
+`X-InfiltratorOS-Module-ABI` metadata. Kernel `/boot/vmlinuz-<ABI>`,
+`/lib/modules/<ABI>` and `/usr/src/linux-headers-<ABI>` paths remain
+transitional compatibility implementation details; they are **not** the
+InfiltratorOS Kernel product version.
+
+The generated package names are matched by Debian's image, debug and headers
+build rules, not renamed after building. The original Linux Kbuild packaging
+mode remains available when native opt-in is absent. **The first successful
+Mint-host packages remain preserved under their original Linux names; this
+new native product packaging mode has not yet had another full Mint-host
+compilation/packaging qualification.** Its generator and staging contracts
+are checked independently in CI. Do not erase or replace the successful
+transitional binary baseline.
 
 ## Native artifact layout
 
@@ -77,11 +88,11 @@ This follows the existing InfiltratorOS authority:
 ```text
 /System/Kernel/
 ├── Images/
-│   ├── InfiltratorOS-<release>.img
-│   ├── InfiltratorOS-<release>.config
-│   └── InfiltratorOS-<release>.map  (when available)
+│   ├── InfiltratorOS-<component-version>.img
+│   ├── InfiltratorOS-<component-version>.config
+│   └── InfiltratorOS-<component-version>.map  (when available)
 ├── Modules/
-│   └── <release>/
+│   └── <module-abi>/
 │       └── kernel/.../*.ko
 ├── Filesystems/
 │   └── <format>.ko                 (owned by Filesystem-*; not this package)
@@ -89,7 +100,7 @@ This follows the existing InfiltratorOS authority:
     └── ...                         (only verified firmware from its owner)
 ```
 
-The `Modules/<release>/` hierarchy keeps module ABI identity and dependency
+The `Modules/<module-abi>/` hierarchy keeps module ABI identity and dependency
 relationships intact. The `Filesystems/` namespace is reserved for the
 individual filesystem-provider builds and is not populated by copying every
 upstream Linux filesystem module there. EFI BOOT binaries and firmware-stage
