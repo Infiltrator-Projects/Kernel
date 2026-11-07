@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=InfiltratorOS Kernel native module discovery and autoload
+Documentation=https://github.com/Infiltrator-Projects/Kernel
+DefaultDependencies=no
+After=local-fs.target
+Before=systemd-udev-trigger.service sysinit.target
+ConditionPathExists=/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe
+
+[Service]
+Type=oneshot
+ExecStart=/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe activate
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target
