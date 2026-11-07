@@ -2292,8 +2292,8 @@ FORCE:
 probe:
 	@bash scripts/build-native.sh --probe
 configure-only:
-	@bash scripts/build-native.sh --configure-only
+	@bash scripts/build-native.sh --configure-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,)
 build-only:
-	@bash scripts/build-native.sh --build-only
+	@bash scripts/build-native.sh --build-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,)
 check:
 	@bash tests/check.sh
