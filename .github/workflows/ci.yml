@@ -1,12 +1,28 @@
-name: Kernel builder contract
+name: Kernel source and builder contracts
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Check scripts (not a kernel build)
-        run: bash tests/check.sh
+      - name: Verify complete source baseline and licensing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in Makefile Kconfig COPYING arch/x86/Makefile kernel/sched/core.c mm/memory.c drivers/Makefile scripts/build-native.sh docs/upstream/BASELINE.md docs/upstream/source-id; do
+            test -s "$file"
+          done
+          grep -Fqx 'linux-hwe-7.0=7.0.0-42.42~24.04.1' docs/upstream/source-id
+          test -s LICENSES/preferred/GPL-2.0
+      - name: Check script syntax and root Kbuild integration (not a kernel compile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          make check
+          make -n probe | grep -F 'scripts/build-native.sh --probe'
+          make -n configure-only SKIP_DEPS=1 | grep -F -- '--skip-deps'
+          make -n build-only SKIP_DEPS=1 | grep -F -- '--skip-deps'
