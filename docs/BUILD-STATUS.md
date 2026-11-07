@@ -25,24 +25,27 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
    ```
 
 6. The first fix modified only `.native-build/obj/.config`, removing unavailable Canonical trusted and revoked certificate paths. However the second build still tried to load the old certificate path. The most likely reason is that generated `include/config/auto.conf` had retained old values, or that package-build recursion used them. This diagnosis must be proven by the next verification step.
-7. The native build script now explicitly runs `syncconfig` and **checks the effective compiled settings in both** `.config` and `include/config/auto.conf` before beginning the kernel package build. Regression tests reject stale Canonical certificate references.
-8. All previous compiler outputs are expected to remain in the local untracked `.native-build/obj/` tree; there is no instruction to clean or remove them. GitHub contains the source and the fixes, **not** the already-built object files from the user's laptop.
+7. The first stricter preflight test on the Mint laptop reported `Kernel: ERROR: missing generated auto.conf; regenerate config before compiling`. This was a **build-script ordering error**: the script invoked `syncconfig` directly before requiring an output which had not been generated. The user did **not** reach another full compilation or installation.
+8. The builder now uses the real Kbuild `prepare` target, which materialises generated configuration and headers, **then** compares `.config` against `include/config/auto.conf` and checks for missing vendor certificate files before proceeding. A new GitHub Actions job compiled actual configuration/preparation tools in an isolated out-of-tree build and passed on 2026-11-07. This validates the preparation sequence on the CI host, not yet a complete Linux Mint compilation or boot.
+9. All previous compiler outputs are expected to remain in the local untracked `.native-build/obj/` tree; there is no instruction to clean or remove them. GitHub contains the source and the fixes, **not** the already-built object files from the user's laptop.
 
 ## Next immediate action
 
-Run from the existing test computer:
+First confirm the updated prepare step works on the original Mint host **without beginning the full kernel build**:
 
 ```bash
-cd ~/Kernel && git pull --ff-only && make check
+cd ~/Kernel && git pull --ff-only && make configure-only SKIP_DEPS=1
 ```
 
-Then re-attempt the native compilation **with full diagnostic logging**:
+Success requires a line similar to `Kernel: Effective compilation certificate settings verified (no missing distro PEMs).` followed by `Kernel: Configured at ...`.
+
+**Only after that succeeds**, continue the incremental compilation with a full diagnostic log:
 
 ```bash
 cd ~/Kernel && set -o pipefail && make build-only SKIP_DEPS=1 JOBS=10 2>&1 | tee "$HOME/Kernel-build-next.log"
 ```
 
-The builder must display a successful effective certificate check **before** it starts compiling. If it instead exits at the check, inspect the actual `.native-build/obj/.config` and `.native-build/obj/include/config/auto.conf`, rather than wasting hours compiling the same known-broken config.
+A preflight failure is a blocker, not a reason to run another long compile. Compare `.native-build/obj/.config` and `.native-build/obj/include/config/auto.conf` if the generated values still diverge.
 
 Do **not** run `make clean`, `mrproper`, delete `.native-build/`, reset the repository, or remove the logs. The existing parallel-build objects can generally be reused.
 
