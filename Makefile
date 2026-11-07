@@ -2298,7 +2298,7 @@ probe:
 configure-only:
 	@bash scripts/build-native.sh --configure-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,)
 build-only:
-	@bash scripts/build-native.sh --build-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,)
+	@bash scripts/build-native.sh --build-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,) $(if $(JOBS),--jobs $(JOBS),)
 stage-native:
 	@bash scripts/infiltrator/stage-native.sh
 package-run:
