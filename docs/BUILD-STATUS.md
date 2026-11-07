@@ -2,6 +2,50 @@
 
 Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent factual status record**, not a completed-release declaration.
 
+## Current correction — 2026-11-08: InfiltratorOS is version 0.1.0
+
+Shannon correctly rejected the old `7.0.14-infiltrator` kernel release
+being presented as an InfiltratorOS version. That number was inherited
+from the imported Linux `VERSION=7 PATCHLEVEL=0 SUBLEVEL=14` Makefile;
+it was never an InfiltratorOS product version. The original local
+compilation and the first native `0.1.0-2` package build used the
+incorrect inherited release and ABI.
+
+**The committed first-party build now explicitly passes
+`KERNELRELEASE=0.1.0-infiltrator`** to Kbuild, with no upstream
+`VERSION`/`PATCHLEVEL`/`SUBLEVEL` rewrite. This leaves internal
+Linux API version-dependent code intact, but makes the resulting
+compiled kernel's `UTS_RELEASE`, module version magic, Kbuild module
+install paths and native Debian metadata identify the real
+InfiltratorOS Kernel **0.1.0** release. The first-party wrapper checks
+the generated `include/config/kernel.release` and
+`include/generated/utsrelease.h` before it compiles and verifies the
+exact ABI recorded in each output .deb. The native package generator,
+native staging and installer reject new packages still carrying
+`7.0.14-infiltrator`.
+
+The corrected Debian packaging **revision is `0.1.0-3`**; earlier
+`0.1.0-1` and `0.1.0-2` artifacts remain historical and are not
+evidence of the new compiled ABI. The tiny public
+`InfiltratorOS-Kernel-0.1.0-amd64.run` downloads the pinned Git
+source into `/Temporary/InfiltratorOS/Kernel`, compiles fresh on the
+computer executing it and attempts native installation under
+`/System/Kernel`. It does not require `~/Kernel`. GitHub only
+publishes this downloader; the full kernel compile/test is not a
+GitHub workflow.
+
+**Not yet verified:** A full fresh physical-machine compilation
+of the updated `0.1.0-infiltrator` release and completed
+`0.1.0-3` package installation. The currently running old
+compilation cannot change its version halfway through the build.
+A newly downloaded corrected `.run` must compile source from the
+corrected commit to provide that evidence. The native installer
+continues to protect existing versioned native installation files
+against unapproved overwrites. Earlier successful QEMU boot is
+evidence for its original compiled kernel only.
+
+---
+
 ## Source and project identity
 
 - GitHub: [Infiltrator-Projects/Kernel](https://github.com/Infiltrator-Projects/Kernel), single active `main` branch.
