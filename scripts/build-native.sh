@@ -61,13 +61,21 @@ mkdir -p "$work" "$out"
 # A Mint baseline kept in Git must not block Debian machines whose running
 # kernel has another base version. Prefer matching source, then fetch exact.
 matches_running() {
-  local dir=$1 v p s base
+  local dir=$1 file first
   [[ -f "$dir/Makefile" && -d "$dir/scripts/kconfig" ]] || return 1
-  v=$(awk '$1=="VERSION" {print $3;exit}' "$dir/Makefile")
-  p=$(awk '$1=="PATCHLEVEL" {print $3;exit}' "$dir/Makefile")
-  s=$(awk '$1=="SUBLEVEL" {print $3;exit}' "$dir/Makefile")
-  base="$v.$p.$s"
-  case "$running" in "$base"|"$base"-*|"$base"+*) return 0 ;; *) return 1 ;; esac
+  # Ubuntu and Debian kernel ABI names need not match the underlying
+  # Linux Makefile VERSION.PATCHLEVEL.SUBLEVEL (e.g. Ubuntu 7.0.0-42
+  # ships a Linux source Makefile at upstream 7.0.14).
+  if [[ -r "$dir/docs/upstream/source-id" ]] &&
+     [[ "$(cat "$dir/docs/upstream/source-id")" == "$pkg=$ver" ]]; then
+    return 0
+  fi
+  for file in "$dir/debian.master/changelog" "$dir/debian/changelog"; do
+    [[ -r "$file" ]] || continue
+    IFS= read -r first < "$file" || :
+    [[ "$first" == "$pkg ($ver)"* ]] && return 0
+  done
+  return 1
 }
 if [[ -n "$source_dir" ]]; then
   source_dir=$(cd "$source_dir" && pwd -P) || fail "Invalid --source-dir"
@@ -99,7 +107,8 @@ v=$(awk '$1=="VERSION" {print $3;exit}' "$source_dir/Makefile")
 p=$(awk '$1=="PATCHLEVEL" {print $3;exit}' "$source_dir/Makefile")
 s=$(awk '$1=="SUBLEVEL" {print $3;exit}' "$source_dir/Makefile")
 base="$v.$p.$s"
-case "$running" in "$base"|"$base"-*|"$base"+*) ;; *) fail "Source $base differs from the running kernel $running" ;; esac
+matches_running "$source_dir" || fail "Source tree does not match installed source package $pkg=$ver"
+log "Upstream kernel code: $base (distribution ABI: $running)"
 obj="$work/obj"; mkdir -p "$obj"
 cp "$config" "$obj/.config"
 log "Configuring with the running distro defaults"
