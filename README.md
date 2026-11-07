@@ -27,3 +27,8 @@ and need the appropriate deb-src entries. They do not change the running
 kernel or boot configuration. The first-party builder is
 `scripts/build-native.sh`. The Linux kernel's normal Kbuild targets
 remain available.
+
+- `make stage-native` stages compiled image and modules under `dist/native/System/Kernel/`.
+- `make package-run` produces a source-bearing local native `.run` builder in `dist/` (not published automatically).
+
+[Native InfiltratorOS Kernel source and installed-file contract](docs/NATIVE-LAYOUT.md) specifies the `/System/Kernel/{Images,Modules,Filesystems,Firmware}` layout. Staging and `.run` compilation do **not** install or boot a kernel; Boot/Setup integration is still outstanding.
