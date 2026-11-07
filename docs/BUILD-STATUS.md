@@ -80,48 +80,35 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 
 . The output names shown include `linux-image-7.0.14-infiltrator_7.0.14-g8541848fe2d7-4_amd64.deb` and the corresponding `linux-image-7.0.14-infiltrator-dbg` package. The builder counted a third matching package, expected to be headers, but its exact filename has not yet been reported. The local build log is `~/Kernel-build-next.log`; the packages were copied to `~/Kernel/dist/`. No kernel installation, activation, boot test, or native stage verification has occurred.
 
-**Current state (confirmed 2026-11-07):** First native kernel build **SUCCEEDED** and created three Debian kernel packages in `dist/`, without installing or booting. Next milestone: **stage the verified compiled image and modules in the InfiltratorOS native `/System/Kernel` artifact tree** (under `dist/native` only). This is a functional compilation baseline, not a qualified independent kernel release.
+17. **FIRST SUCCESSFUL NATIVE STAGING — verified by user terminal, 2026-11-07.** On the same Latitude 5550, after `git pull --ff-only`, `make stage-native` printed `Kernel stage: Unpacking locally compiled package: linux-image-7.0.14-infiltrator_7.0.14-g8541848fe2d7-4_amd64.deb`, `Kernel stage: Staged InfiltratorOS kernel 7.0.14-infiltrator under /home/ssmith/Kernel/dist/native/System/Kernel/`, then `Kernel stage: Not installed; no boot configuration, system files or running kernel were modified.` The shell returned normally. That proves **staging completed successfully** (the checksum-generation step is part of this stage). No boot, install or runtime compatibility test has yet occurred.
 
-## Next immediate action — stage successful build without installing
+**Current state (confirmed 2026-11-07):** **Full native kernel build and InfiltratorOS /System/Kernel staging both SUCCEEDED on the actual Mint laptop**, with three compiled Debian packages in `dist/` and native tree under `dist/native/System/Kernel/`. The files are still a **transitional Linux-derived build** and carry inherited `linux-image` package names and `7.0.14` kernel ABI numbering. These are **not yet the intended product-facing package names or versions**; migrate independently of the preserved successful baseline. No installation or boot qualification has occurred.
 
-On the Mint laptop, the completed kernel source and object tree are still
-local; the source Git repository preserves the build logic and this record,
-but **not** the compiled output or host log.
+## Next immediate action — package identity migration, preserve milestone
 
-The next step is `make stage-native` on the **existing** compiled package
-set. It uses `.native-build/last-completed-objtree` to find the in-source
-objects, and unpacks the local image .deb into
-`dist/native/System/Kernel/{Images,Modules,Filesystems,Firmware}`. It also
-writes integrity checksums and a staging-status record. This does not install
-anything to `/System`, `/boot`, or the running kernel.
+With the first successful compile and staging verified, the next development
+task is **actual native package identity/versioning**, not another kernel compile.
+The InfiltratorOS Kernel component version is taken from this repository's
+`VERSION=0.1.0`; InfiltratorOS operating system integration has its own version;
+Linux `7.0.14-infiltrator` is a **transitional exact module ABI** needed by this
+first binary.
 
-To avoid overwriting any previously staged output, run:
+Migrate the Debian package generator, binary package selection, image/headers
+and debug package names/metadata, module-header build paths and staging script
+as a matched, regression-tested change. Keep the original Linux ABI paths
+inside the binary until the independent InfiltratorOS loader, runtime module
+mechanism and boot pipeline are ready. Never simply rename `.deb` filenames.
 
-```bash
-cd ~/Kernel && git pull --ff-only && if [[ -e dist/native || -L dist/native ]]; then echo "Existing dist/native found — preserving it; no staging performed"; else make stage-native; fi
-```
+**Do not start another full compilation just to change the package identity.**
+First validate generated Debian control files, builder selection, and native
+staging against small synthetic test packages in CI. The existing successful
+build outputs at `~/Kernel/dist/` and `~/Kernel/dist/native/` must not be
+deleted or overwritten by this work. Any future new native staging should
+write to a separate output path until proven.
 
-Expected: `Kernel stage: Staged InfiltratorOS kernel 7.0.14-infiltrator under .../dist/native/System/Kernel/`,
-followed by `Not installed; no boot configuration, system files or running
-kernel were modified.` If staging reports a missing image/objects, **do not
-rebuild or clean**; inspect the staging result and the existing `dist/`
-packages.
-
-**Preservation:** Keep `~/Kernel/.config`, source-tree compiler objects,
-`~/Kernel/.native-build/`, `~/Kernel/dist/`, all generated .deb files,
-and `~/Kernel-build-next.log`. Never run `make clean`, `mrproper`,
-`git clean`, delete the kernel directory, or reinstall the host as part
-of this transition.
-
-**After staging is verified:** migrate user-visible package identity and
-component version from inherited `linux-image-7.0.14-infiltrator` /
-`7.0.14` to InfiltratorOS Kernel `0.1.0` in the *actual package
-generator and metadata*, including image/headers/debug dependencies,
-version sources and native installer contract. Preserve transitional kernel
-ABI and Linux compatibility during migration; do not merely rename files.
-The long-term kernel is an independent InfiltratorOS architecture developed
-from the Linux source foundation, with deliberate Linux compatibility,
-not a permanently rebranded Linux distro.
+Keep `~/Kernel/.config`, compiler objects, `~/Kernel/.native-build/`,
+`~/Kernel/dist/`, and `~/Kernel-build-next.log`. No `make clean`,
+`mrproper`, `git clean`, kernel installation or bootloader modification.
 
 ## Longer-term goals (not yet completed)
 
