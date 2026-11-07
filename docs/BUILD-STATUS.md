@@ -129,6 +129,24 @@ the permission error; **do not delete existing files or redirect to dist**.
 Do not run `make clean`, `mrproper`, `git clean`, `git reset --hard`,
 delete any output, install a kernel package, or reboot as part of these checks.
 
+## Latest host result — staged tree blocked by directory permissions
+
+On 2026-11-07, Shannon ran `cd ~/Kernel && git pull --ff-only && make check && bash scripts/infiltrator/stage-native.sh --packages "$PWD/dist"` and updated to commit `3969b4eee`. All first-party tests passed, including native staging, package identity and certificate checks. Actual staging then reported `Kernel stage: Reading preserved legacy packages from /home/ssmith/Kernel/dist` followed by `mkdir: cannot create directory '/Temporary/InfiltratorOS/Kernel': Permission denied`, and returned to the prompt. **This is not a build or ABI failure. The three new `0.1.0` Debian packages in `~/Kernel/dist/` and previous successful build remain intact. The live `/System/Kernel` was never touched.** This attempt did not successfully create the new native staging tree.
+
+To provide access without recursively chowning the shared InfiltratorOS Temporary root, provision **only** the Kernel child workspace:
+
+```bash
+sudo install -d -m 0750 -o "$(id -un)" -g "$(id -gn)" /Temporary/InfiltratorOS/Kernel
+```
+
+Then as the normal user, after updating Git, re-run **staging only**, not a full build:
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/stage-native.sh --packages "$PWD/dist"
+```
+
+If access still fails, inspect `namei -l /Temporary/InfiltratorOS/Kernel` for parent traversal restrictions; do not change ownership of `/Temporary` or `/Temporary/InfiltratorOS` blindly. The staging script now reports targeted permissions guidance. Never run the entire build or staging as root merely to bypass this error, nor delete/clean any compiled artifacts.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
