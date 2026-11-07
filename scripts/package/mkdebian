@@ -192,9 +192,10 @@ if [ "${INFILTRATOROS_NATIVE_PACKAGE:-0}" = 1 ]; then
   printf '%s\n' "$product_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+
   sourcename=infiltratoros-kernel
   # Revision -1 was proven to install in inherited Linux directories.
-  # Native /System/Kernel install-only payload starts with -2; never mistake
-  # the archived -1 package for an InfiltratorOS native installer.
-  packageversion=${product_version}-2
+  # Native -2 corrected the on-disk layout but still carried the imported
+  # Linux 7.0.14-infiltrator ABI. Revision -3 is the first independently
+  # versioned InfiltratorOS 0.1.0-infiltrator binary build.
+  packageversion=${product_version}-3
   packagename=infiltratoros-kernel-image
   release_suffix=$product_version
   header_package=infiltratoros-kernel-headers-${product_version}
@@ -347,9 +348,10 @@ exit 0
   fi
   sourcename=infiltratoros-kernel
   # Revision -1 was proven to install in inherited Linux directories.
-  # Native /System/Kernel install-only payload starts with -2; never mistake
-  # the archived -1 package for an InfiltratorOS native installer.
-  packageversion=${product_version}-2
+  # Native -2 corrected the on-disk layout but still carried the imported
+  # Linux 7.0.14-infiltrator ABI. Revision -3 is the first independently
+  # versioned InfiltratorOS 0.1.0-infiltrator binary build.
+  packageversion=${product_version}-3
   packagename=infiltratoros-kernel-image
   release_suffix=$product_version
   header_package=infiltratoros-kernel-headers-${product_version}
