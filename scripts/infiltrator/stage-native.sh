@@ -6,6 +6,8 @@ set -euo pipefail
 fail() { printf 'Kernel stage: ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf 'Kernel stage: %s\n' "$*" >&2; }
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
+component_version=$(tr -d '\r\n' < "$root/VERSION")
+[[ "$component_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Kernel stage: ERROR: invalid component VERSION" >&2; exit 1; }
 packages="$root/dist"
 objects="$root/.native-build/obj"
 # Older builds compiled in-source because their parent `make` exported
@@ -19,7 +21,10 @@ if [[ -f "$root/.native-build/last-completed-objtree" ]]; then
     *) echo "Kernel stage: ERROR: unexpected saved object directory: $saved_objects" >&2; exit 1 ;;
   esac
 fi
-output="$root/dist/native"
+# Stage into a distinct product-versioned tree, preserving the successful
+# transitional binary baseline in dist/native/ untouched.
+output="$root/dist/native-$component_version"
+replace_existing=0
 while (( $# )); do
   case "$1" in
     --packages|--objects|--output)
@@ -29,8 +34,9 @@ while (( $# )); do
         --objects) objects=$1 ;;
         --output) output=$1 ;;
       esac ;;
+    --replace) replace_existing=1 ;;
     --help|-h)
-      echo "Usage: stage-native.sh [--packages DIR] [--objects DIR] [--output DIR]"
+      echo "Usage: stage-native.sh [--packages DIR] [--objects DIR] [--output DIR] [--replace]"
       echo 'Stages kernel images and built modules for InfiltratorOS, without installation.'
       exit 0 ;;
     *) fail "Unknown option: $1" ;;
@@ -51,13 +57,23 @@ output=$(cd "$(dirname "$output")" && pwd -P)/$(basename "$output")
 [[ ! -L "$output" ]] || fail 'Output location must not be a symbolic link'
 shopt -s nullglob
 images=()
+legacy_images=()
 for deb in "$packages"/*.deb; do
   package=$(dpkg-deb -f "$deb" Package) || fail "Cannot inspect $deb"
-  if [[ "$package" == "linux-image-$release" || "$package" == "linux-image-unsigned-$release" ]]; then
+  if [[ "$package" == "infiltratoros-kernel-image-$component_version" ]]; then
+    abi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI) || fail "Cannot inspect package ABI: $deb"
+    [[ "$abi" == "$release" ]] || fail "Native image package ABI ($abi) does not match built kernel ($release)"
     images+=("$deb")
+  elif [[ "$package" == "linux-image-$release" || "$package" == "linux-image-unsigned-$release" ]]; then
+    # Read-only compatibility with the already successful Linux-named baseline.
+    legacy_images+=("$deb")
   fi
 done
-(( ${#images[@]} == 1 )) || fail "Expected one compiled image package for $release; found ${#images[@]}"
+if (( ${#images[@]} == 0 )); then
+  images=("${legacy_images[@]}")
+  log 'Using preserved transitional image package; native package renaming not yet built'
+fi
+(( ${#images[@]} == 1 )) || fail "Expected one matching compiled image for $release; found ${#images[@]}"
 base=$(dirname "$output")
 tmp=$(mktemp -d "$base/.native-stage.XXXXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
@@ -67,10 +83,10 @@ log "Unpacking locally compiled package: $(basename "${images[0]}")"
 dpkg-deb -x "${images[0]}" "$tmp/extracted"
 image="$tmp/extracted/boot/vmlinuz-$release"
 [[ -f "$image" ]] || fail "Compiled boot image not found at /boot/vmlinuz-$release in image package"
-cp -a -- "$image" "$tmp/result/System/Kernel/Images/InfiltratorOS-$release.img"
-cp -a -- "$objects/.config" "$tmp/result/System/Kernel/Images/InfiltratorOS-$release.config"
+cp -a -- "$image" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.img"
+cp -a -- "$objects/.config" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.config"
 if [[ -f "$objects/System.map" ]]; then
-  cp -a -- "$objects/System.map" "$tmp/result/System/Kernel/Images/InfiltratorOS-$release.map"
+  cp -a -- "$objects/System.map" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.map"
 fi
 module_path=''
 for prefix in lib usr/lib; do
@@ -87,7 +103,9 @@ fi
 # The two reserved namespaces must remain format-owner controlled.
 cat > "$tmp/result/STAGING-STATUS.txt" <<TEXT
 product=InfiltratorOS Kernel
+product_version=$component_version
 kernel_release=$release
+transitional_module_abi=$release
 boot_install=not-performed
 host_install=not-performed
 secure_boot=not-qualified
@@ -99,9 +117,10 @@ TEXT
   cd "$tmp/result"
   find System -type f -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS.txt
 )
-[[ -s "$tmp/result/System/Kernel/Images/InfiltratorOS-$release.img" ]] || fail 'Staged image is empty'
+[[ -s "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.img" ]] || fail 'Staged image is empty'
 [[ -s "$tmp/result/SHA256SUMS.txt" ]] || fail 'Staged checksum manifest is empty'
 if [[ -e "$output" ]]; then
+  (( replace_existing )) || fail "Output already exists: $output (preserved; use --replace only if intentional)"
   [[ -d "$output" && ! -L "$output" ]] || fail 'Existing output is not a regular directory'
   mv -- "$output" "$tmp/previous"
 fi
@@ -109,5 +128,5 @@ if ! mv -- "$tmp/result" "$output"; then
   if [[ -d "$tmp/previous" ]]; then mv -- "$tmp/previous" "$output"; fi
   fail 'Could not publish staged native tree'
 fi
-log "Staged InfiltratorOS kernel $release under $output/System/Kernel/"
+log "Staged InfiltratorOS Kernel $component_version (module ABI: $release) under $output/System/Kernel/"
 log 'Not installed; no boot configuration, system files or running kernel were modified.'
