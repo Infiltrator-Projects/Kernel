@@ -291,7 +291,7 @@ endif
 version_h := include/generated/uapi/linux/version.h
 
 clean-targets := %clean mrproper cleandocs
-no-dot-config-targets := $(clean-targets) \
+no-dot-config-targets := $(clean-targets) probe configure-only build-only check \
 			 cscope gtags TAGS tags help% %docs check% coccicheck \
 			 $(version_h) headers headers_% archheaders archscripts \
 			 %asm-generic kernelversion %src-pkg dt_binding_check \
