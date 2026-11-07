@@ -34,7 +34,11 @@ EOF
       printf 'compiled native image\n' > "$p/System/Kernel/Images/InfiltratorOS-$version.img"
       printf 'compiled native .config\n' > "$p/System/Kernel/Images/InfiltratorOS-$version.config"
       printf 'compiled native symbols\n' > "$p/System/Kernel/Images/InfiltratorOS-$version.map"
-      printf 'compiled native ko\n' > "$p/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/test.ko" ;;
+      printf 'compiled native ko\n' > "$p/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/test.ko"
+      mkdir -p "$p/System/Kernel/Runtime/InfiltratorOS-$version"
+      cp "$root/scripts/infiltrator/module-runtime.sh" "$p/System/Kernel/Runtime/InfiltratorOS-$version/modprobe"
+      chmod 0755 "$p/System/Kernel/Runtime/InfiltratorOS-$version/modprobe"
+      printf "%s\n" "$version" > "$p/System/Kernel/Runtime/InfiltratorOS-$version/VERSION" ;;
     "infiltratoros-kernel-headers-$version")
       mkdir -p "$p/System/Kernel/Headers/InfiltratorOS-$version/include"
       printf 'compiled header\n' > "$p/System/Kernel/Headers/InfiltratorOS-$version/include/test.h" ;;
@@ -53,6 +57,7 @@ INFILTRATOROS_TEMP_ROOT="$temp_root" \
 [[ -s "$install_root/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/test.ko" ]]
 [[ -s "$install_root/System/Kernel/Headers/InfiltratorOS-$version/include/test.h" ]]
 [[ -s "$install_root/System/Kernel/Debug/InfiltratorOS-$version/lib/modules/$abi/vmlinux" ]]
+[[ -x "$install_root/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" ]]
 [[ ! -e "$install_root/boot" && ! -e "$install_root/lib" && ! -e "$install_root/usr" ]]
 [[ $(sha256sum "$install_root/System/Kernel/Filesystems/FAT16.ko" | cut -d' ' -f1) == "$before" ]]
 if INFILTRATOROS_TEMP_ROOT="$temp_root" \

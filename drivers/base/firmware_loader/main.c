@@ -468,7 +468,8 @@ static int fw_decompress_xz(struct device *dev, struct fw_priv *fw_priv,
 #endif /* CONFIG_FW_LOADER_COMPRESS_XZ */
 
 /* direct firmware loading support */
-static char fw_path_para[256];
+/* InfiltratorOS native firmware first, preserving ordinary Linux fallback. */
+static char fw_path_para[256] = "/System/Kernel/Firmware";
 static const char * const fw_path[] = {
 	fw_path_para,
 	"/lib/firmware/updates/" UTS_RELEASE,

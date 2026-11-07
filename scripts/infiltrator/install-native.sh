@@ -123,6 +123,10 @@ native="$workspace/unpacked/System/Kernel"
   fail 'Freshly generated native developer headers are missing'
 [[ -d "$native/Debug/InfiltratorOS-$version" ]] ||
   fail 'Freshly compiled native debug symbols are missing'
+[[ -x "$native/Runtime/InfiltratorOS-$version/modprobe" ]] ||
+  fail 'Native compiled kernel module helper is missing'
+[[ -s "$native/Runtime/InfiltratorOS-$version/VERSION" ]] ||
+  fail 'Native module helper version is missing'
 found_module=$(find "$native/Modules/InfiltratorOS-$version" -type f \
   \( -name '*.ko' -o -name '*.ko.*' \) -print -quit)
 [[ -n "$found_module" ]] || fail 'No compiled native kernel modules'
@@ -149,8 +153,9 @@ managed_paths=(
   "Modules/InfiltratorOS-$version"
   "Headers/InfiltratorOS-$version"
   "Debug/InfiltratorOS-$version"
+  "Runtime/InfiltratorOS-$version"
 )
-for parent in Images Modules Headers Debug; do
+for parent in Images Modules Headers Debug Runtime; do
   [[ ! -L "$target/$parent" ]] ||
     fail "Refusing symlinked native installation parent: $target/$parent"
 done

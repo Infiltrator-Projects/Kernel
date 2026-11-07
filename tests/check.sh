@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bash -n scripts/build-native.sh
+bash -n scripts/infiltrator/module-runtime.sh
+bash tests/module-runtime.sh
 sh -n scripts/package/mkdebian
 sh -n scripts/package/builddeb
 # The real QEMU test is an explicit opt-in using disposable virtual images.
@@ -28,6 +30,7 @@ grep -q -- 'linux-headers-' scripts/build-native.sh
 grep -Fq 'KERNELRELEASE="$release_id"' scripts/build-native.sh
 grep -Fq 'release_id="$product_version-infiltrator"' scripts/build-native.sh
 grep -Fq 'utsrelease.h' scripts/build-native.sh
+grep -Fq -- '--set-str MODPROBE_PATH' scripts/build-native.sh
 grep -q -- 'bindeb-pkg' scripts/build-native.sh
 echo "PASS: syntax and CLI-contract checks (NOT a complete kernel build)"
 

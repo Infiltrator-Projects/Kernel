@@ -7,7 +7,7 @@ sh -n "$root/scripts/package/builddeb"
 sandbox=$(mktemp -d)
 trap 'rm -rf -- "$sandbox"' EXIT
 abi=0.1.0-infiltrator
-mkdir -p "$sandbox/source/scripts/package" "$sandbox/native/include/config" \
+mkdir -p "$sandbox/source/scripts/package" "$sandbox/source/scripts/infiltrator" "$sandbox/native/include/config" \
   "$sandbox/native/arch/x86/boot" "$sandbox/legacy/include/config" \
   "$sandbox/legacy/arch/x86/boot"
 cat > "$sandbox/source/scripts/package/install-extmod-build" <<'STUB'
@@ -17,6 +17,8 @@ mkdir -p "$1/include"
 printf 'compiled header sample\n' > "$1/include/verified.h"
 STUB
 chmod +x "$sandbox/source/scripts/package/install-extmod-build"
+cp "$root/scripts/infiltrator/module-runtime.sh" "$sandbox/source/scripts/infiltrator/module-runtime.sh"
+cp "$root/scripts/infiltrator/infiltratoros-kernel-modules.service" "$sandbox/source/scripts/infiltrator/infiltratoros-kernel-modules.service"
 printf 'fake source makefile\n' > "$sandbox/source/Makefile"
 cat > "$sandbox/fake-make" <<'MAKE'
 #!/bin/sh
@@ -60,6 +62,9 @@ runtime="$sandbox/native/debian/infiltratoros-kernel-image-0.1.0"
 [[ -s "$runtime/System/Kernel/Images/InfiltratorOS-0.1.0.map" ]]
 [[ -s "$runtime/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/test.ko" ]]
 [[ -d "$runtime/System/Kernel/Filesystems" && -d "$runtime/System/Kernel/Firmware" ]]
+[[ -x "$runtime/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe" ]]
+[[ $(cat "$runtime/System/Kernel/Runtime/InfiltratorOS-0.1.0/VERSION") == 0.1.0 ]]
+[[ -s "$runtime/System/Kernel/Runtime/InfiltratorOS-0.1.0/infiltratoros-kernel-modules.service" ]]
 [[ ! -e "$runtime/lib" && ! -e "$runtime/usr" && ! -e "$runtime/boot" ]]
 [[ ! -e "$runtime/DEBIAN/postinst" && ! -e "$runtime/DEBIAN/preinst" ]]
 run_package native infiltratoros-kernel-headers-0.1.0 1

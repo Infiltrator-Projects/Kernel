@@ -188,6 +188,9 @@ cp "$config" "$obj/.config"
 # certificate files not carried in the published source package. Never edit
 # the installed /boot config or fabricate a certificate to satisfy Kbuild.
 bash "$root/scripts/infiltrator/prepare-certificates.sh" "$source_dir" "$obj"
+# Compile the InfiltratorOS module helper path into the native kernel.
+native_modprobe="/System/Kernel/Runtime/InfiltratorOS-$product_version/modprobe"
+"$source_dir/scripts/config" --file "$obj/.config" --set-str MODPROBE_PATH "$native_modprobe"
 log "Configuring with the running distro defaults"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
 # A fresh kernel make is required at every stage: the outer `make build-only`
@@ -210,6 +213,8 @@ release=$(bash "$root/scripts/infiltrator/run-kbuild.sh" -s --no-print-directory
   fail 'Missing compiled UTS release header'
 grep -Fqx "#define UTS_RELEASE \"$release_id\"" "$obj/include/generated/utsrelease.h" ||
   fail 'Compiled UTS_RELEASE still contains the imported Linux source version'
+grep -Fqx "CONFIG_MODPROBE_PATH=\"$native_modprobe\"" "$obj/include/config/auto.conf" ||
+  fail "Compiled kernel has not selected the native InfiltratorOS module helper"
 log "Generated InfiltratorOS kernel release and module ABI: $release"
 if [[ "$mode" == --configure-only ]]; then log "Configured at $obj/.config"; exit 0; fi
 # The first-party native build uses InfiltratorOS's own release and vermagic.

@@ -131,3 +131,21 @@ The wrapper **does not** run `apt install`, modify the ESP, NVRAM, live
 successfully compiled `~/Kernel/dist/` artifacts untouched.
 
 [Native InfiltratorOS Kernel source and installed-file contract](docs/NATIVE-LAYOUT.md) specifies the `/System/Kernel/{Images,Modules,Filesystems,Firmware}` layout. Staging and `.run` compilation do **not** install or boot a kernel; Boot/Setup integration is still outstanding.
+
+## Native kernel module discovery (first stage)
+
+Kernel 0.1.0 now compiles `CONFIG_MODPROBE_PATH` pointing to
+`/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe`. At runtime this helper
+builds an indexed `/run/infiltratoros-kernel` view of the compiled modules
+under `/System/Kernel/Modules/InfiltratorOS-0.1.0/`, plus only ABI-compatible
+`.ko` filesystem adapters from `/System/Kernel/Filesystems/`. The kernel's
+firmware loader searches `/System/Kernel/Firmware` before its upstream
+fallbacks. The helper refuses to load modules when a different kernel is
+running and never changes Linux Mint `/lib/modules`, `/boot`, EFI or NVRAM.
+
+The accompanying native systemd unit is staged under `/System/Kernel/Runtime/`
+but is **not enabled on the Mint build host**. Kernel requests after the native
+root is available can invoke the compiled-in helper automatically. Early
+initramfs requirements, a verified native root, real module insertion and the
+unified `/System/Filesystems/*.so` kernel bridge remain separately unqualified.
+Ordinary Linux cannot load a userspace `.so` as a `.ko` simply by redirecting paths.

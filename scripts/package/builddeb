@@ -83,6 +83,14 @@ install_linux_image () {
 			"${native_root}/Images/InfiltratorOS-${native_version}.img"
 		cp "${KCONFIG_CONFIG}" "${native_root}/Images/InfiltratorOS-${native_version}.config"
 		cp System.map "${native_root}/Images/InfiltratorOS-${native_version}.map"
+		# Packaged only inside native /System/Kernel, not Mint /etc or /boot.
+		runtime_dir="${native_root}/Runtime/InfiltratorOS-${native_version}"
+		mkdir -p "$runtime_dir"
+		install -m 0755 "${srctree}/scripts/infiltrator/module-runtime.sh" "$runtime_dir/modprobe"
+		printf "%s\n" "$native_version" > "$runtime_dir/VERSION"
+		sed "s/InfiltratorOS-0.1.0/InfiltratorOS-${native_version}/g" \
+			"${srctree}/scripts/infiltrator/infiltratoros-kernel-modules.service" \
+			> "$runtime_dir/infiltratoros-kernel-modules.service"
 		return
 	fi
 
