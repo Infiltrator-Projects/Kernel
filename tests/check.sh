@@ -12,6 +12,11 @@ bash tests/preserve-milestone.sh
 bash tests/repackage-native.sh
 # Test actual Kbuild path generator with synthetic image/header/debug inputs.
 bash tests/native-builddeb-paths.sh
+# Actual synthetic installation of 3 native Debian packages into isolated root.
+# Proves the fresh-build installer never needs /boot or /lib/modules.
+bash tests/install-native.sh
+bash -n scripts/infiltrator/package-run.sh
+bash -n scripts/infiltrator/install-native.sh
 bash tests/home-artifacts.sh
 grep -Fq 'boot_version=0.1.39' scripts/infiltrator/test-ovmf-handoff.sh
 grep -Fq 'mktemp -d "$workspace/Tests/' scripts/infiltrator/test-ovmf-handoff.sh
