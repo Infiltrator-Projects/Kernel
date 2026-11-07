@@ -147,10 +147,19 @@ release=$(bash "$root/scripts/infiltrator/run-kbuild.sh" -s --no-print-directory
 [[ "$release" == *infiltrator* && "$release" != "$running" ]] || fail "Kernel release suffix is not distinct: $release"
 log "Generated kernel release: $release"
 if [[ "$mode" == --configure-only ]]; then log "Configured at $obj/.config"; exit 0; fi
-log "Building Debian packages using $jobs jobs; NO kernel install or reboot"
+# InfiltratorOS Kernel has an independent product version; keep KERNELRELEASE
+# untouched as the current module/boot ABI. Never regenerate distro packages
+# when using a foreign source without the native packaging integration.
+product_version=$(tr -d '\r\n' < "$root/VERSION")
+[[ "$product_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Invalid InfiltratorOS Kernel product VERSION: $product_version"
+grep -Fq INFILTRATOROS_NATIVE_PACKAGE "$source_dir/scripts/package/mkdebian" ||
+  fail "Selected upstream source has not integrated the InfiltratorOS native package generator"
+export INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION="$product_version"
+log "Building InfiltratorOS Kernel $product_version (transitional module ABI: $release) using $jobs jobs; NO kernel install or reboot"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" -j "$jobs" bindeb-pkg
 count=0
-: > "$out/SHA256SUMS.txt"
+manifest="$out/SHA256SUMS-infiltratoros-kernel-$product_version.txt"
+: > "$manifest"
 # bindeb-pkg places generated .debs in the parent of the active objtree:
 # .native-build for O= builds, or the parent of the source tree for legacy
 # in-tree builds. Scan only this build's actual output directory.
@@ -158,12 +167,15 @@ packages_dir=$(dirname "$obj")
 for deb in "$packages_dir"/*.deb; do
   [[ -f "$deb" ]] || continue
   name=$(dpkg-deb -f "$deb" Package)
-  case "$name" in linux-image-*infiltrator*|linux-headers-*infiltrator*) ;; *) continue ;; esac
+  case "$name" in
+    "infiltratoros-kernel-image-$product_version"|"infiltratoros-kernel-image-$product_version-dbg"|"infiltratoros-kernel-headers-$product_version") ;;
+    *) continue ;;
+  esac
   cp "$deb" "$out/"
-  (cd "$out" && sha256sum "$(basename "$deb")") >> "$out/SHA256SUMS.txt"
+  (cd "$out" && sha256sum "$(basename "$deb")") >> "$manifest"
   count=$((count+1))
 done
-(( count > 0 )) || fail "Build completed but no distinct Infiltrator .deb was found"
+(( count > 0 )) || fail "Build completed but no InfiltratorOS Kernel $product_version .deb was found"
 printf '%s\n' "$obj" > "$work/last-completed-objtree"
 {
  echo "object_tree=$obj"
@@ -171,7 +183,8 @@ printf '%s\n' "$obj" > "$work/last-completed-objtree"
  echo "source_package=$pkg"
  echo "source_version=$ver"
  echo "kernel_release=$release"
+ echo "component_version=$product_version"
  echo "config_sha256=$(sha256sum "$config" | cut -d' ' -f1)"
  echo "installed_kernel=no"
-} > "$out/build-provenance.txt"
-log "Created $count kernel .deb package(s) in dist/. No kernel was installed."
+} > "$out/build-provenance-infiltratoros-kernel-$product_version.txt"
+log "Created $count InfiltratorOS Kernel $product_version .deb package(s) in dist/. No kernel was installed."
