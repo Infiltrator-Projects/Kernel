@@ -6,7 +6,7 @@ root=$(cd "$(dirname "$0")/.." && pwd -P)
 sh -n "$root/scripts/package/builddeb"
 sandbox=$(mktemp -d)
 trap 'rm -rf -- "$sandbox"' EXIT
-abi=7.0.14-infiltrator
+abi=0.1.0-infiltrator
 mkdir -p "$sandbox/source/scripts/package" "$sandbox/native/include/config" \
   "$sandbox/native/arch/x86/boot" "$sandbox/legacy/include/config" \
   "$sandbox/legacy/arch/x86/boot"
