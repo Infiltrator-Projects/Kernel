@@ -312,8 +312,11 @@ if [ "$native_identity" -eq 1 ]; then
     }
     native && /^Architecture:/ {
       print
-      print "X-InfiltratorOS-Kernel-Version: " version
-      print "X-InfiltratorOS-Module-ABI: " abi
+      # Debian source control requires the XB- prefix for fields copied
+      # into binary .deb control; dpkg-gencontrol strips this XB- prefix.
+      # Preserve the intended binary fields X-InfiltratorOS-*.
+      print "XB-X-InfiltratorOS-Kernel-Version: " version
+      print "XB-X-InfiltratorOS-Module-ABI: " abi
       native=0
       next
     }
