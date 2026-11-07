@@ -27,4 +27,30 @@ if bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$testdir/obj" "
   exit 1
 fi
 grep -Fq 'stale generated Kbuild configuration' "$testdir/stale.log"
-echo 'PASS: Kbuild generated certificates match .config; stale Canonical PEM paths detected'
+# Kconfig omits a MODULE_SIG_KEY string from auto.conf when its
+# dependencies are disabled, even if .config retains a default filename.
+cp "$testdir/obj/.config" "$testdir/obj/include/config/auto.conf"
+sed -i '/^CONFIG_MODULE_SIG_KEY=/d' "$testdir/obj/include/config/auto.conf"
+bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$testdir/obj" "$testdir/obj/.config" >/dev/null
+
+# The same omission must be rejected when module signing is enabled.
+printf '%s\n' CONFIG_MODULE_SIG=y >> "$testdir/obj/.config"
+printf '%s\n' CONFIG_MODULE_SIG=y >> "$testdir/obj/include/config/auto.conf"
+if bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$testdir/obj" "$testdir/obj/.config" > "$testdir/active.log" 2>&1; then
+  echo 'FAIL: missing active MODULE_SIG_KEY was accepted' >&2
+  exit 1
+fi
+grep -Fq 'active MODULE_SIG_KEY is absent' "$testdir/active.log"
+printf '%s\n' 'CONFIG_MODULE_SIG_KEY="certs/signing_key.pem"' >> "$testdir/obj/include/config/auto.conf"
+bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$testdir/obj" "$testdir/obj/.config" >/dev/null
+
+# An active trusted keyring must not silently skip its configured input.
+sed -i '/^CONFIG_SYSTEM_TRUSTED_KEYS=/d' "$testdir/obj/include/config/auto.conf"
+printf '%s\n' CONFIG_SYSTEM_TRUSTED_KEYRING=y >> "$testdir/obj/include/config/auto.conf"
+if bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$testdir/obj" "$testdir/obj/.config" > "$testdir/active.log" 2>&1; then
+  echo 'FAIL: missing active SYSTEM_TRUSTED_KEYS was accepted' >&2
+  exit 1
+fi
+grep -Fq 'active SYSTEM_TRUSTED_KEYS is absent' "$testdir/active.log"
+
+echo 'PASS: certificate config checks accept inactive keys, detect missing active keys and reject stale Canonical PEM paths'
