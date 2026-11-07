@@ -50,7 +50,7 @@ mkdir -p "$workspace/unpacked" "$workspace/controls"
 abi=
 for pkg in "$image_pkg" "$header_pkg" "$debug_pkg"; do
   files=( "$packages"/"${pkg}"_*.deb )
-  (( ${"#files[@]"} == 1 )) && [[ -s "${files[0]}" ]] ||
+  (( ${#files[@]} == 1 )) && [[ -s "${files[0]}" ]] ||
     fail "Expected exactly one compiled native Debian package for $pkg"
   deb="${files[0]}"
   [[ $(dpkg-deb -f "$deb" Package) == "$pkg" ]] ||
