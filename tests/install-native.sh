@@ -4,7 +4,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 version=$(tr -d '\r\n' < "$root/VERSION")
-abi=7.0.14-infiltrator
+abi=0.1.0-infiltrator
 sandbox=$(mktemp -d)
 trap 'rm -rf -- "$sandbox"' EXIT
 packages="$sandbox/Packages"
