@@ -1,0 +1,38 @@
+name: Import official Linux kernel baseline into repository root
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/import-kernel-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kernel-source-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Enable authenticated Ubuntu source repositories
+        shell: bash
+        run: |
+          sudo tee /etc/apt/sources.list.d/infiltrator-src.sources >/dev/null <<'SOURCES'
+          Types: deb-src
+          URIs: http://archive.ubuntu.com/ubuntu/
+          Suites: noble noble-updates noble-security
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          SOURCES
+          sudo apt-get update -qq
+      - name: Import complete HWE kernel source and publish to main
+        run: bash scripts/infiltrator/import-kernel-baseline.sh

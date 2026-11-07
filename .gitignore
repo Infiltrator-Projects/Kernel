@@ -1,9 +1,0 @@
-.native-build/
-dist/
-upstream/
-*.deb
-*.dsc
-*.orig.tar.*
-*.diff.gz
-src/linux/.config
-src/linux/Module.symvers
