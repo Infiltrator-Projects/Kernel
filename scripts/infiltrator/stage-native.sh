@@ -109,20 +109,41 @@ mkdir -p "$tmp/extracted" "$tmp/result/System/Kernel/Images" "$tmp/result/System
   "$tmp/result/System/Kernel/Filesystems" "$tmp/result/System/Kernel/Firmware"
 log "Unpacking locally compiled package: $(basename "${images[0]}")"
 dpkg-deb -x "${images[0]}" "$tmp/extracted"
-image="$tmp/extracted/boot/vmlinuz-$release"
-[[ -f "$image" ]] || fail "Compiled boot image not found at /boot/vmlinuz-$release in image package"
-cp -a -- "$image" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.img"
-cp -a -- "$objects/.config" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.config"
-if [[ -f "$objects/System.map" ]]; then
-  cp -a -- "$objects/System.map" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.map"
-fi
-module_path=''
-for prefix in lib usr/lib; do
-  if [[ -d "$tmp/extracted/$prefix/modules/$release" ]]; then
-    module_path="$tmp/extracted/$prefix/modules/$release"
-    break
+# The original -1 packages install to Linux /boot and /lib/modules.
+# The corrected -2 native packages install directly into /System/Kernel.
+# Accept both as *inputs* without ever reinstalling or altering the host.
+native_source="$tmp/extracted/System/Kernel"
+if [[ -f "$native_source/Images/InfiltratorOS-$component_version.img" ]]; then
+  image="$native_source/Images/InfiltratorOS-$component_version.img"
+  module_path="$native_source/Modules/InfiltratorOS-$component_version"
+  [[ -d "$module_path" ]] || fail 'Native image package lacks its native module tree'
+  cp -a -- "$image" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.img"
+  if [[ -f "$native_source/Images/InfiltratorOS-$component_version.config" ]]; then
+    cp -a -- "$native_source/Images/InfiltratorOS-$component_version.config" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.config"
+  else
+    cp -a -- "$objects/.config" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.config"
   fi
-done
+  if [[ -f "$native_source/Images/InfiltratorOS-$component_version.map" ]]; then
+    cp -a -- "$native_source/Images/InfiltratorOS-$component_version.map" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.map"
+  fi
+  log 'Staging correctly native-packaged /System/Kernel image and module paths'
+else
+  image="$tmp/extracted/boot/vmlinuz-$release"
+  [[ -f "$image" ]] || fail "Compiled boot image not found at /boot/vmlinuz-$release in image package"
+  cp -a -- "$image" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.img"
+  cp -a -- "$objects/.config" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.config"
+  if [[ -f "$objects/System.map" ]]; then
+    cp -a -- "$objects/System.map" "$tmp/result/System/Kernel/Images/InfiltratorOS-$component_version.map"
+  fi
+  module_path=''
+  for prefix in lib usr/lib; do
+    if [[ -d "$tmp/extracted/$prefix/modules/$release" ]]; then
+      module_path="$tmp/extracted/$prefix/modules/$release"
+      break
+    fi
+  done
+  log 'Reading historical Linux-path -1 package as a compatibility input only'
+fi
 [[ -n "$module_path" ]] ||
   fail "Package $(basename "${images[0]}") has no modules under the exact compiled ABI $release; refusing to stage it"
 # A directory and release-shaped image alone are insufficient to validate a
