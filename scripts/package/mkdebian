@@ -172,6 +172,7 @@ sourcename=${KDEB_SOURCENAME:-linux-upstream}
 native_identity=0
 product_version=
 homepage=https://www.kernel.org/
+changelog_description='Custom built Linux kernel.'
 image_description="Linux kernel, version ${KERNELRELEASE}"
 image_details=" This package contains the Linux kernel, modules and corresponding other
  files, version: ${KERNELRELEASE}."
@@ -199,6 +200,7 @@ if [ "${INFILTRATOROS_NATIVE_PACKAGE:-0}" = 1 ]; then
   header_package=infiltratoros-kernel-headers-${product_version}
   debug_package=infiltratoros-kernel-image-${product_version}-dbg
   homepage=https://github.com/Infiltrator-Projects/Kernel
+  changelog_description='InfiltratorOS kernel development build from acknowledged source.'
   image_description="InfiltratorOS kernel image, component version ${product_version}"
   image_details=" InfiltratorOS kernel image and modules, independently versioned.
  Transitional module ABI: ${KERNELRELEASE}."
@@ -230,7 +232,7 @@ host_gnu=$(dpkg-architecture -a "${debarch}" -q DEB_HOST_GNU_TYPE | sed 's/_/-/g
 cat <<EOF > debian/changelog
 $sourcename ($packageversion) $distribution; urgency=low
 
-  * InfiltratorOS development kernel (source-derived build).
+  * $changelog_description
 
  -- $maintainer  $(date -R)
 EOF
