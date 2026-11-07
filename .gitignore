@@ -186,6 +186,6 @@ sphinx_*/
 /rust-project.json
 
 # InfiltratorOS native-build scratch and output
-.native-build/
-dist/
-upstream/
+/.native-build/
+/dist/
+/upstream/
