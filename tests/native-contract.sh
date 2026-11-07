@@ -76,4 +76,42 @@ native_stage="$native_temp/Kernel/Staging/InfiltratorOS-0.1.0"
 [[ ! -e "$sandbox/Temporary/InfiltratorOS/dist" ]]
 ( cd "$native_stage" && sha256sum -c SHA256SUMS.txt >/dev/null )
 
-echo 'PASS: native Temporary staging, product version/ABI metadata, preservation and checksums'
+# Regression: the first production InfiltratorOS 0.1.0 .deb packages were
+# already built, but their source-only X-... fields were omitted by
+# dpkg-gencontrol. Accept that known historical binary only after examining
+# the exact compiled boot image and loadable module payload.
+mkdir -p "$sandbox/missing-abi/DEBIAN" "$sandbox/missing-abi/boot" \
+  "$sandbox/missing-abi/lib/modules/$release/kernel/drivers" \
+  "$sandbox/missing-abi-packages"
+cat > "$sandbox/missing-abi/DEBIAN/control" <<EOF_MISSING
+Package: infiltratoros-kernel-image-0.1.0
+Version: 0.1.0-1
+Architecture: amd64
+Maintainer: InfiltratorOS test harness <noreply@example.invalid>
+Description: Historically compiled image lacking optional binary ABI field
+EOF_MISSING
+printf 'native image without field\n' > "$sandbox/missing-abi/boot/vmlinuz-$release"
+printf 'native module without field\n' > "$sandbox/missing-abi/lib/modules/$release/kernel/drivers/test.ko"
+dpkg-deb --build "$sandbox/missing-abi" "$sandbox/missing-abi-packages/no-abi-field.deb" >/dev/null
+bash scripts/infiltrator/stage-native.sh --packages "$sandbox/missing-abi-packages" \
+  --objects "$sandbox/obj" --output "$sandbox/native-noabi"
+grep -Fxq 'native image without field' "$sandbox/native-noabi/System/Kernel/Images/InfiltratorOS-0.1.0.img"
+[[ -s "$sandbox/native-noabi/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/test.ko" ]]
+( cd "$sandbox/native-noabi" && sha256sum -c SHA256SUMS.txt >/dev/null )
+
+# A package with no metadata must NOT pass merely because its Debian package
+# name looks correct. Requiring the actual image and matching module path
+# catches incorrect payloads before the staging result becomes visible.
+mkdir -p "$sandbox/wrong-abi-packages"
+mv "$sandbox/missing-abi/boot/vmlinuz-$release" "$sandbox/missing-abi/boot/vmlinuz-unrelated"
+dpkg-deb --build "$sandbox/missing-abi" "$sandbox/wrong-abi-packages/wrong-abi.deb" >/dev/null
+if bash scripts/infiltrator/stage-native.sh --packages "$sandbox/wrong-abi-packages" \
+  --objects "$sandbox/obj" --output "$sandbox/native-wrong-abi" \
+  >"$sandbox/wrong-abi.log" 2>&1; then
+  echo 'FAIL: package with missing ABI metadata and incompatible image was staged' >&2
+  exit 1
+fi
+grep -Fq 'Compiled boot image not found' "$sandbox/wrong-abi.log"
+[[ ! -e "$sandbox/native-wrong-abi" ]]
+
+echo 'PASS: native Temporary staging, legacy ABI metadata fallback, payload checks and preservation'
