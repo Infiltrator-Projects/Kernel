@@ -38,29 +38,50 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 
 15. **Verified on the actual Mint test laptop:** after Git fast-forward to `8541848fe`, the user ran `bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$PWD" "$PWD/.config"` in `~/Kernel`; it returned `Kernel: Effective compilation certificate settings verified (no missing distro PEMs).` with exit success. This confirms the certificate preflight against the generated in-source configuration on that machine. **It is not evidence that the complete kernel compiled, packaged or booted.** The next step is to resume the incremental native package build with full logging: `set -o pipefail && make build-only SKIP_DEPS=1 JOBS=10 2>&1 | tee "$HOME/Kernel-build-next.log"`. Preserve the existing in-source object files and do not run any clean target.
 
-**Current state:** Certificate configuration verified on the target Mint laptop; the complete kernel build and packaging are still outstanding. The updated wrapper and legacy-object reuse require verification on the actual Mint host.
+**Current state (latest reported, 2026-11-07):** InfiltratorOS kernel native build passed certificate verification, generated a local signing key, linked the kernel objects, processed module metadata and reached Debian kernel packaging. The user's latest screenshot showed signing, stripping and building the image/debug packages. **The final shell exit and package inventory have not yet been supplied**, so neither a successful complete build nor installation/boot qualification can be asserted.
 
-## Next immediate action
+## Next immediate action — verify first packaging result, do not rebuild
 
-First confirm the updated prepare step works on the original Mint host **without beginning the full kernel build**:
+The user reported the native kernel compilation advancing past `MODPOST` to
+`SIGN`, `STRIP`, `INSTALL`, `DEPMOD`, and `dpkg-deb` creation of
+`linux-image-7.0.14-infiltrator` and its debug-symbol package. This is
+**observed progress**, not proof that every package finished successfully.
+
+If the original compilation is still running, allow it to finish and **do not
+start another build**. On the Mint laptop, check the saved log and any completed
+packages without modifying source or build outputs:
 
 ```bash
-cd ~/Kernel && git pull --ff-only && make configure-only SKIP_DEPS=1
+cd ~/Kernel && printf '\n=== END OF BUILD LOG ===\n' && tail -n 35 "$HOME/Kernel-build-next.log" && printf '\n=== KERNEL PACKAGES ===\n' && find "$HOME" -maxdepth 3 -type f -name '*infiltrator*.deb' -printf '%p (%s bytes)\n' 2>/dev/null
 ```
 
-Success requires `Kernel: Effective compilation certificate settings verified (no missing distro PEMs).` followed by `Kernel: Configured at ...`. On this laptop the configured object tree may be **`~/Kernel/.config`**, because the earlier bug caused a real in-source build; the builder should explicitly report that it is reusing those existing compiled objects.
+The result needs to establish whether the builder printed
+`Kernel: Created ... kernel .deb package(s) in dist/.` followed by a normal
+shell prompt, and which .deb files actually exist. If the terminal is still
+busy, the log is only provisional. If it failed, preserve the log and address
+the **first real error** before rebuilding.
 
-**Only after that succeeds**, continue the incremental compilation with a full diagnostic log:
+**Preservation:** Keep `~/Kernel/.config`, source-tree object files,
+`~/Kernel/.native-build/`, `~/Kernel/dist/`, any generated .deb files in the
+home directory, and `~/Kernel-build-next.log`. Never use `make clean`,
+`mrproper`, `git clean` or delete these artifacts to fix a naming issue.
+GitHub commits preserve source and decisions, not local compiled objects.
 
-```bash
-cd ~/Kernel && set -o pipefail && make build-only SKIP_DEPS=1 JOBS=10 2>&1 | tee "$HOME/Kernel-build-next.log"
-```
+**Next engineering change once the baseline build is conclusively verified:**
+separate product identity from implementation origin. InfiltratorOS Kernel
+`VERSION=0.1.0` is its independent component version; the operating-system
+integration package version is separate; the current Linux `7.0.14` and
+`7.0.14-infiltrator` are historical source/transitional module ABI identifiers.
+Rename the *actual Debian package metadata*, generated image/headers/debug
+package family and visible release identity to InfiltratorOS only with matching
+installer, module-loader, Boot and Setup changes. Do not relabel package
+filenames alone or change the running kernel ABI while it is building.
 
-A preflight failure is a blocker, not a reason to run another long compile. Compare `.native-build/obj/.config` and `.native-build/obj/include/config/auto.conf` if the generated values still diverge.
-
-Do **not** run `make clean`, `mrproper`, delete `.native-build/`, reset the repository, or remove the logs. The existing parallel-build objects can generally be reused.
-
-The old diagnostic file, if present, is `~/Kernel-build.log`. The new log is `~/Kernel-build-next.log`. Neither should be committed into Git: they can be large and machine-specific.
+Architectural destination: **InfiltratorOS as its own operating system and
+kernel, developed from Linux source, with deliberate Linux application
+compatibility**, analogous in evolutionary intent (not precise kernel origin)
+to macOS being Unix-compatible but independently engineered. Retain original
+source licences/provenance, and validate module compatibility separately.
 
 ## Longer-term goals (not yet completed)
 
