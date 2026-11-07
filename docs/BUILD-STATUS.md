@@ -766,6 +766,76 @@ and `/usr/src` into qualified native `/System/Kernel` remains a
 **not yet backed up off the laptop**. This successful cleanup does not
 claim either of those tasks is complete.
 
+## Native Debian installation path defect corrected in source — 2026-11-07
+
+After the verified `0.1.0` build, Shannon correctly identified that
+native `System/Kernel` **staging alone was not enough**: the actual
+three historical `infiltratoros-kernel-` `0.1.0-1` Debian packages
+still installed kernel images under `/boot`, kernel modules under
+`/lib/modules`, headers under `/usr/src` and debug symbols under
+`/usr/lib/debug`. Those were not valid final InfiltratorOS native
+installation paths. Do not describe the original `-1` .debs as fully
+native or appropriate for installing on Mint.
+
+**Source changes committed on the one `main` branch:**
+
+- `scripts/package/builddeb`: native mode, explicitly selected with
+  `INFILTRATOROS_NATIVE_PACKAGE=1`, now writes kernel image/config/map
+  into `/System/Kernel/Images/`, compiled `.ko` and module metadata under
+  `/System/Kernel/Modules/InfiltratorOS-0.1.0/`, developer headers under
+  `/System/Kernel/Headers/InfiltratorOS-0.1.0/` and debug symbols under
+  `/System/Kernel/Debug/InfiltratorOS-0.1.0/`. It rejects any incidental
+  leftover `/boot`, `/lib`, `/usr` or other non-native root content
+  from Kbuild staging before packaging. Native mode does **not** generate
+  host Debian kernel maintainer scripts/boot hooks. The unflagged upstream
+  Linux Kbuild path is preserved unchanged for compatibility.
+- `scripts/package/mkdebian`: new native binary **revision
+  `0.1.0-2`** explicitly differentiates it from preserved historical
+  Linux-path packages **`0.1.0-1`**. The kernel's actual
+  `7.0.14-infiltrator` module ABI remains unchanged.
+- `scripts/infiltrator/repackage-native.sh`: independent
+  **no-compile, no-install** converter consumes already compiled/archived
+  original image, header and debug packages plus the SHA-256 verified
+  `0.1.0` native stage. It writes three entirely new
+  `0.1.0-2` Debian packages under
+  `/Temporary/InfiltratorOS/Kernel/Packages/NativeLayout/InfiltratorOS-0.1.0/`
+  with clean control metadata (no kernel hooks). It inspects actual
+  binary `.deb` filesystem tar members to prove every installable entry
+  is under `/System/Kernel/`, checks names/versions/ABI, writes
+  `SHA256SUMS.txt`, protects against overwrite, and leaves the original
+  `-1` packages, original compiler object tree, successful VM boot
+  evidence, archive and installed Mint OS intact.
+- `scripts/infiltrator/stage-native.sh`: accepts both original Linux-path
+  `-1` and correct native-path `-2` payloads as inputs for disposable
+  **uninstalled** staging; never replaces the already proven stage by
+  default.
+- `tests/repackage-native.sh`, `tests/native-builddeb-paths.sh`,
+  `tests/native-contract.sh` and `tests/package-identity.sh`: synthetic
+  regression tests inspect both generated source-generator paths and the
+  actual new Debian archive members, preserve legacy behaviour when
+  explicitly opting out of native mode, and check that historical originals
+  remain unchanged. GitHub Actions CI has passed their source-level test
+  suite; this is not an actual laptop-wide real package test.
+- The authoritative OS `InfiltratorOS/docs/FILESYSTEM.md` documents
+  optional `Headers/` and `Debug/` under `/System/Kernel/`, separate
+  from `Modules/` and format-provider `Filesystems/`.
+
+**Next required real host action — NOT YET DONE:**
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/repackage-native.sh
+```
+
+This uses **existing** compiled binaries and **does not recompile**
+the kernel. It creates versioned native packages in Temporary and verifies
+their actual paths. Only a real `Native Kernel package: PASS` on Shannon's
+Latitude proves the corrected `0.1.0-2` binaries are created locally.
+Afterwards we must qualify native runtime module loading, root filesystem
+access, Boot/Setup integration and a separate physical-system install plan.
+Do not use `dpkg -i`, `apt install`, `make clean` or rebuild/overwrite
+the successfully preserved `0.1.0-1` evidence merely to correct
+filesystem paths.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
