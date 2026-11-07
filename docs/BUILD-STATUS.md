@@ -652,6 +652,80 @@ before taking action. Avoid `rm`, `git clean`, `make clean`,
 verified archive is user-owned long-term preservation rather than native
 kernel runtime layout; an off-device backup remains outstanding.
 
+## Actual home-directory eight-file clean-up succeeded — 2026-11-07
+
+On the real Mint Latitude 5550, Shannon fast-forwarded the Kernel source
+to `f2a048222`, ran the read-only inventory and then invoked
+`bash scripts/infiltrator/audit-home-artifacts.sh --relocate`.
+The script found and **moved, SHA-256 verified** the following eight
+regular files out of the top-level `/home/ssmith` directory:
+
+```text
+infiltratoros-kernel_0.1.0-1_amd64.buildinfo
+infiltratoros-kernel_0.1.0-1_amd64.changes
+infiltratoros-kernel-headers-0.1.0_0.1.0-1_amd64.deb
+infiltratoros-kernel-image-0.1.0_0.1.0-1_amd64.deb
+infiltratoros-kernel-image-0.1.0-dbg_0.1.0-1_amd64.deb
+linux-headers-7.0.14-infiltrator_7.0.14-g8541848fe2d7-4_amd64.deb
+linux-image-7.0.14-infiltrator_7.0.14-g8541848fe2d7-4_amd64.deb
+linux-image-7.0.14-infiltrator-dbg_7.0.14-g8541848fe2d7-4_amd64.deb
+```
+
+The terminal ended:
+
+```text
+Kernel home audit: PASS: identified files moved out of Home into /home/ssmith/InfiltratorOS-Kernel-Archive/HistoricalHomeOutputs-0.1.0
+Kernel home audit: Existing 0.1.0 verified archive, native staged kernel, VM evidence, unrelated home files and host installation were not modified.
+```
+
+This action is **complete and verified**. The independent original full
+milestone archive at `~/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0`,
+the real virtual-boot logs, original kernel source/object tree and the
+uninstalled staged image have **not** been deleted. The historical output
+archive is not an InfiltratorOS *installed system* tree; it is long-term
+source/build provenance and keeping it outside `/System` is deliberate.
+
+Three files remained **unclassified and unmoved**, which the original
+strict audit correctly refused to touch:
+
+```text
+linux-libc-dev_7.0.14-g8541848fe2d7-4_amd64.deb
+linux-upstream_7.0.14-g8541848fe2d7-4_amd64.buildinfo
+linux-upstream_7.0.14-g8541848fe2d7-4_amd64.changes
+```
+
+Source-level verification of `scripts/package/mkdebian` explains
+these paths: the upstream Linux build uses `linux-upstream` as its
+Debian source package and includes the `linux-libc-dev` binary package.
+A now-committed enhancement to
+`scripts/infiltrator/audit-home-artifacts.sh` identifies only those
+remaining files whose embedded package version or Debian source metadata
+**matches the actual Linux image package already verified in the
+historical archive**. It reports them as `APPROVED-UPSTREAM` in preview;
+a new separate `--relocate-upstream-remainder` mode preserves them under
+`HistoricalHomeOutputs-0.1.0/UpstreamRemainder/`, with a separate
+checksum inventory, **without overwriting or modifying the eight-file
+historical archive or the golden first-boot archive**.
+
+The follow-up relocation has **not yet run on the laptop**. After Git CI
+passes the new synthetic regression, the next non-destructive step is:
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/audit-home-artifacts.sh
+```
+
+Once the preview identifies the exact three files as
+`APPROVED-UPSTREAM`, explicitly relocate only that remainder:
+
+```bash
+cd ~/Kernel && bash scripts/infiltrator/audit-home-artifacts.sh --relocate-upstream-remainder
+```
+
+This is the **home-directory housekeeping** task. It is independent of
+future native `/System/Kernel` installation-layout changes and must
+not be confused with their completion. Never use a blanket home cleanup,
+delete kernel build objects or reinstall the saved baseline.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
