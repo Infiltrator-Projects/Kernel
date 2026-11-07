@@ -29,3 +29,22 @@ jobs:
           make -n build-only SKIP_DEPS=1 JOBS=1 | grep -F -- '--jobs 1'
           make -n stage-native | grep -F 'scripts/infiltrator/stage-native.sh'
           make -n package-run | grep -F 'scripts/infiltrator/package-run.sh'
+
+      - name: Exercise actual out-of-tree Kbuild configuration generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bc bison flex libelf-dev libssl-dev dwarves
+          obj="$RUNNER_TEMP/infiltrator-kbuild-config-test"
+          make O="$obj" x86_64_defconfig
+          # Simulate inherited distribution certificate paths which are
+          # absent from a locally reproduced source checkout.
+          scripts/config --file "$obj/.config" --set-str SYSTEM_TRUSTED_KEYS debian/ci-missing-certs.pem
+          scripts/config --file "$obj/.config" --set-str SYSTEM_REVOCATION_KEYS debian/ci-missing-revoked.pem
+          bash scripts/infiltrator/prepare-certificates.sh "$PWD" "$obj"
+          make O="$obj" LOCALVERSION=-infiltrator olddefconfig
+          make O="$obj" LOCALVERSION=-infiltrator prepare
+          bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$obj" "$obj/.config"
+          test -s "$obj/include/config/auto.conf"
+          echo "PASS: real Kbuild prepare materialises verified effective .config"
