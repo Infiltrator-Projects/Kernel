@@ -100,34 +100,14 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 
 **Confirmed state:** Two complete full native kernel package builds have succeeded on the Latitude 5550; first `linux-image`-named baseline was staged successfully, and the second generated **three genuine InfiltratorOS Kernel 0.1.0 packages** in `~/Kernel/dist/`. Native uninstalled Temporary layout source fixes and tests are committed, but the newly branded image has not yet been verified in its new staged `/Temporary/InfiltratorOS/Kernel/Staging/...` output. No actual host kernel installation or boot qualification has occurred.
 
-## Next immediate action — verify and stage without rebuilding
+## Historical recovery commands (already completed)
 
-On the Mint laptop, preserve the full kernel build output and update the source
-to include the native directory-layout corrections:
-
-```bash
-cd ~/Kernel && git pull --ff-only && make check
-```
-
-That is a **short contract test**, not another full kernel compile. When it
-passes, stage the **already built** InfiltratorOS 0.1.0 packages explicitly:
-
-```bash
-cd ~/Kernel && bash scripts/infiltrator/stage-native.sh --packages "$PWD/dist"
-```
-
-Expected **uninstalled** output:
-`/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/System/Kernel/`.
-The script should refuse to overwrite an existing stage without an explicit
-request. It neither installs nor activates `/System/Kernel` and must not touch
-the host's bootloader. If `/Temporary/InfiltratorOS` is not writable, report
-the permission error; **do not delete existing files or redirect to dist**.
-
-**Preserve** `~/Kernel/dist/`, `~/Kernel/dist/native/`,
-`~/Kernel/.native-build/`, all compiled in-source objects,
-`~/Kernel-build-next.log`, and `~/Kernel-build-native-0.1.0.log`.
-Do not run `make clean`, `mrproper`, `git clean`, `git reset --hard`,
-delete any output, install a kernel package, or reboot as part of these checks.
+The commands to resolve permissions and stage the first native `0.1.0` build
+**have now succeeded**. Do not repeat `make stage-native` or run
+`--replace`: the uninstalled output is preserved under
+`/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/`.
+See the latest confirmed staging result and read-only checksum verification
+below. Earlier failures are retained here as an audit trail, not open blockers.
 
 ## Latest host result — staged tree blocked by directory permissions
 
@@ -197,6 +177,59 @@ Expected uninstalled staging under
 the preserved source/compiler output or successful package binaries.**
 If the staging destination already exists, the script refuses to overwrite
 it without explicit confirmation.
+
+## Confirmed native 0.1.0 staging success on Latitude 5550 — 2026-11-07
+
+After updating Git `main` to `151d83c6d`, Shannon successfully ran:
+
+```bash
+cd ~/Kernel && git pull --ff-only && make check && bash scripts/infiltrator/stage-native.sh --packages "$PWD/dist"
+```
+
+The local checks passed: syntax/CLI, certificate preparation, native Temporary
+staging, existing ABI-field-less package fallback, actual `dpkg-gencontrol`
+metadata generation, and effective Kbuild certificate configuration. Crucially,
+the **real** staging step (not a synthetic test) reported:
+
+```text
+Kernel stage: Package lacks the optional binary ABI field; validating actual boot image and module payload before staging
+Kernel stage: Unpacking locally compiled package: infiltratoros-kernel-image-0.1.0_0.1.0-1_amd64.deb
+Kernel stage: Verified exact compiled image and module payload for ABI 7.0.14-infiltrator
+Kernel stage: Staged InfiltratorOS Kernel 0.1.0 under /Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/System/Kernel/
+Kernel stage: The inherited module ABI remains in STAGING-STATUS.txt, not the native directory names
+Kernel stage: Not installed; no boot configuration, system files or running kernel were modified.
+```
+
+The command returned to the normal shell prompt successfully. This **resolves
+both** earlier blockers: inability to write the native Temporary workspace and
+the missing custom ABI metadata in the historical already-built binary. The
+latter was validated by inspecting the expected image path and module payload
+instead of modifying or rebuilding the preserved package.
+
+**Current confirmed milestone:** Two successful full kernel builds, a
+successful Linux-compatible historical staging baseline, and **successful real
+InfiltratorOS 0.1.0 package staging into the corrected Temporary/System/Kernel
+artifact tree**. The historical `~/Kernel/dist/` packages, compilation
+objects and both log files remain valuable and must not be cleaned or moved.
+The staged tree is **uninstalled and still Linux ABI-derived**; there is no
+proof of a working native loader, filesystem-engine bridge, hardware-selected
+module set, Secure Boot, boot, or installed runtime.
+
+**Next task is read-only integrity verification**, not another build or
+staging operation:
+
+```bash
+stage=/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0
+( cd "$stage" && sha256sum --quiet -c SHA256SUMS.txt ) &&
+printf 'Staged checksum verification: PASS\n' &&
+cat "$stage/STAGING-STATUS.txt" &&
+du -sh "$stage/System/Kernel/"*
+```
+
+The `sha256sum` validation checks the content manifest generated by staging,
+but is separate from actual kernel installation/boot qualification. Further
+work should proceed bottom-up to reconcile module ABI identity, loader and Boot
+handoff, not by renaming internal Linux symbols in the already-built package.
 
 ## Longer-term goals (not yet completed)
 
