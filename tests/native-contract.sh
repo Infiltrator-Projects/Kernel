@@ -24,12 +24,39 @@ printf '%s\n' "$release" > "$sandbox/obj/include/config/kernel.release"
 printf 'CONFIG_TEST=y\n' > "$sandbox/obj/.config"
 dpkg-deb --build "$sandbox/pkg" "$sandbox/packages/fake.deb" >/dev/null
 bash scripts/infiltrator/stage-native.sh --packages "$sandbox/packages" --objects "$sandbox/obj" --output "$sandbox/native"
-[[ -s "$sandbox/native/System/Kernel/Images/InfiltratorOS-$release.img" ]]
+[[ -s "$sandbox/native/System/Kernel/Images/InfiltratorOS-0.1.0.img" ]]
 [[ -s "$sandbox/native/System/Kernel/Modules/$release/kernel/drivers/test.ko" ]]
 [[ -d "$sandbox/native/System/Kernel/Filesystems" ]]
 [[ -d "$sandbox/native/System/Kernel/Firmware" ]]
 [[ ! -e "$sandbox/native/boot" && ! -e "$sandbox/native/lib" ]]
 ( cd "$sandbox/native" && sha256sum -c SHA256SUMS.txt >/dev/null )
-bash scripts/infiltrator/stage-native.sh --packages "$sandbox/packages" --objects "$sandbox/obj" --output "$sandbox/native"
+# A second staging pass must not silently overwrite the original output.
+if bash scripts/infiltrator/stage-native.sh --packages "$sandbox/packages" --objects "$sandbox/obj" --output "$sandbox/native" > "$sandbox/refused.log" 2>&1; then
+  echo 'FAIL: stage overwrote the original without explicit replacement' >&2
+  exit 1
+fi
+grep -Fq 'Output already exists' "$sandbox/refused.log"
+bash scripts/infiltrator/stage-native.sh --packages "$sandbox/packages" --objects "$sandbox/obj" --output "$sandbox/native" --replace
 ( cd "$sandbox/native" && sha256sum -c SHA256SUMS.txt >/dev/null )
-echo 'PASS: native image/modules layout, checksum integrity and repeated local staging'
+
+# If both a preserved Linux-named baseline and a new native image are present,
+# stage the native package matching this component version and exact module ABI.
+mkdir -p "$sandbox/newpkg/DEBIAN" "$sandbox/newpkg/boot" "$sandbox/newpkg/lib/modules/$release/kernel/drivers"
+cat > "$sandbox/newpkg/DEBIAN/control" <<EOF_NATIVE
+Package: infiltratoros-kernel-image-0.1.0
+Version: 0.1.0-1
+Architecture: amd64
+Maintainer: InfiltratorOS test harness <noreply@example.invalid>
+X-InfiltratorOS-Kernel-Version: 0.1.0
+X-InfiltratorOS-Module-ABI: $release
+Description: Native kernel packaging contract test
+EOF_NATIVE
+printf 'native image\n' > "$sandbox/newpkg/boot/vmlinuz-$release"
+printf 'native module\n' > "$sandbox/newpkg/lib/modules/$release/kernel/drivers/test.ko"
+dpkg-deb --build "$sandbox/newpkg" "$sandbox/packages/native.deb" >/dev/null
+bash scripts/infiltrator/stage-native.sh --packages "$sandbox/packages" --objects "$sandbox/obj" --output "$sandbox/native-0.1.0"
+grep -Fxq 'native image' "$sandbox/native-0.1.0/System/Kernel/Images/InfiltratorOS-0.1.0.img"
+grep -Fxq 'product_version=0.1.0' "$sandbox/native-0.1.0/STAGING-STATUS.txt"
+grep -Fxq "transitional_module_abi=$release" "$sandbox/native-0.1.0/STAGING-STATUS.txt"
+( cd "$sandbox/native-0.1.0" && sha256sum -c SHA256SUMS.txt >/dev/null )
+echo 'PASS: native product version/ABI identity, legacy package fallback, checksums and preservation'
