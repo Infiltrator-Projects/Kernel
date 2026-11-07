@@ -50,4 +50,34 @@ dest="$home/InfiltratorOS-Kernel-Archive/HistoricalHomeOutputs-$version"
 [[ -s "$home/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-$version/SHA256SUMS-Archive.txt" ]]
 ( cd "$dest" && sha256sum --quiet -c SHA256SUMS.txt )
 grep -Fq 'PASS:' "$sandbox/Moved.log"
-echo 'PASS: read-only preview; strict verified home cleanup; unrelated files and complete kernel archive preserved'
+# The Linux upstream Kbuild run also emits linux-libc-dev and two
+# linux-upstream source metadata files. They are accepted only if their
+# internal version and source match the exact *archived* Linux image .deb.
+cat > "$sandbox/pkg/DEBIAN/control" <<EOF
+Package: linux-libc-dev
+Version: 0.1.0-1
+Architecture: amd64
+Maintainer: InfiltratorOS Test <noreply@example.invalid>
+Description: Synthetic upstream libc compatibility headers
+EOF
+dpkg-deb --build "$sandbox/pkg" "$home/linux-libc-dev_0.1.0-1_amd64.deb" >/dev/null
+for extension in buildinfo changes; do
+  printf 'Source: linux-upstream\nVersion: 0.1.0-1\n' > "$home/linux-upstream_0.1.0-1_amd64.$extension"
+done
+# Same filename shape but incorrect source identity is still UNCLASSIFIED.
+printf 'Source: unrelated\nVersion: 0.1.0-1\n' > "$home/linux-upstream_0.1.0-1_amd64.other"
+HOME="$home" INFILTRATOROS_TEMP_ROOT="$temporary" bash scripts/infiltrator/audit-home-artifacts.sh > "$sandbox/UpstreamPreview.log" 2>&1
+[[ $(grep -Fc 'APPROVED-UPSTREAM' "$sandbox/UpstreamPreview.log") == 3 ]]
+[[ -s "$home/linux-libc-dev_0.1.0-1_amd64.deb" ]]
+HOME="$home" INFILTRATOROS_TEMP_ROOT="$temporary" bash scripts/infiltrator/audit-home-artifacts.sh --relocate-upstream-remainder > "$sandbox/UpstreamMoved.log" 2>&1
+extra="$dest/UpstreamRemainder"
+[[ -s "$extra/linux-libc-dev_0.1.0-1_amd64.deb" ]]
+[[ -s "$extra/linux-upstream_0.1.0-1_amd64.buildinfo" ]]
+[[ -s "$extra/linux-upstream_0.1.0-1_amd64.changes" ]]
+[[ -s "$home/linux-upstream_0.1.0-1_amd64.other" ]]
+[[ -s "$home/Personal.txt" ]]
+( cd "$extra" && sha256sum --quiet -c SHA256SUMS.txt )
+( cd "$dest" && sha256sum --quiet -c SHA256SUMS.txt )
+[[ -s "$home/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-$version/SHA256SUMS-Archive.txt" ]]
+grep -Fq 'PASS:' "$sandbox/UpstreamMoved.log"
+echo 'PASS: strict home audits, independently verified upstream remainder, unrelated files and golden archive preserved'
