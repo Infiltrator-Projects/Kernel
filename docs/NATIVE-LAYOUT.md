@@ -167,13 +167,20 @@ individual filesystem-provider builds and is not populated by copying every
 upstream Linux filesystem module there. EFI BOOT binaries and firmware-stage
 drivers belong to the independent **Boot** component, not this repository.
 
-The native `0.1.0-2` installable Debian payload contract deliberately
-**differs** from the historical `0.1.0-1` Linux-path Debian packages.
-The old packages and confirmed boot evidence remain preserved and unchanged.
-The corrected `scripts/package/builddeb` generator and the
-no-compile `scripts/infiltrator/repackage-native.sh` converter make
-all three image, headers and debug package payloads live exclusively
-inside `/System/Kernel/`. Native image/modules install in `Images`
+The native Debian packaging contract places every image, header and
+debug file exclusively inside `/System/Kernel/`. Historical
+`0.1.0-1` packages still had inherited Linux installation paths.
+The previous `0.1.0-2` layout correction was incomplete: those
+binaries were still built with the **upstream Linux-derived**
+`7.0.14-infiltrator` release and module ABI. The current corrected
+first-party builder produces **InfiltratorOS Kernel 0.1.0** with
+Kbuild UTS release and module ABI **`0.1.0-infiltrator`**, using
+Debian package revision **`0.1.0-3`**. The source `Makefile`
+remains upstream Linux `7.0.14` for internal Linux API compatibility.
+Native package generation refuses to label new binaries
+`7.0.14-infiltrator`. The historical no-compile repacker can still
+handle the older source binaries but does not substitute for an actual
+freshly compiled `0.1.0-infiltrator` kernel. Native image/modules install in `Images`
 and `Modules`; optional developer files in `Headers` and `Debug`.
 All these are defined in the authoritative OS filesystem contract.
 Native packages have **no** legacy Debian kernel maintainer hooks that
@@ -219,16 +226,21 @@ without deleting the originals.
 make package-run
 ```
 
-Creates `/Temporary/InfiltratorOS/Kernel/Packages/InfiltratorOS-Kernel-<VERSION>-amd64.run`,
-a source-bearing builder assembled from the committed Git tree. On a
-supported computer it extracts the source locally, detects that host's running
-kernel and configuration, compiles with the local toolchain, produces its own
-packages and stages its `/System/Kernel` hierarchy.
+Creates a **small** `/Temporary/InfiltratorOS/Kernel/Packages/InfiltratorOS-Kernel-<VERSION>-amd64.run`
+which contains a Git commit ID and source downloader, not kernel source.
+The public GitHub release distributes the downloader. Running it on
+a supported computer creates its temporary workspace automatically, checks
+out the exact pinned source from GitHub, then compiles the real local kernel
+and packages without relying on old local object files. It stages and
+verifies native packages and installs the resulting files into the host's
+`/System/Kernel` unless `--build-only` is selected.
 
-The `.run` intentionally **does not yet install or activate** the image:
-until Boot and Setup qualify the kernel-runtime transition, installation
-would be misleading and unsafe. No binary from a central CI runner is silently
-described as a native compilation.
+**Native file installation is not boot activation.** The installer
+does not replace the host's current boot image, module path, EFI files
+or NVRAM entries, and does not claim native OS/root/module-loader
+qualification. GitHub does not compile or test the kernel as part
+of publishing the downloader. The source update must be verified by
+a real local compilation and package install.
 
 ## Identity and licensing
 
