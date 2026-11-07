@@ -6,6 +6,8 @@ bash -n scripts/build-native.sh
 # The real QEMU test is an explicit opt-in using disposable virtual images.
 # CI checks its syntax and pinned Boot release without altering host firmware.
 bash -n scripts/infiltrator/test-ovmf-handoff.sh
+# End-to-end self-check uses only synthetic packages and disposable files.
+bash tests/preserve-milestone.sh
 grep -Fq 'boot_version=0.1.39' scripts/infiltrator/test-ovmf-handoff.sh
 grep -Fq 'mktemp -d "$workspace/Tests/' scripts/infiltrator/test-ovmf-handoff.sh
 grep -Fq 'sha256sum -c SHA256SUMS.txt' scripts/infiltrator/test-ovmf-handoff.sh
