@@ -1,4 +1,4 @@
-name: Publish InfiltratorOS Kernel source-bearing .run
+name: Publish small InfiltratorOS Kernel downloader .run
 
 on:
   push:
@@ -9,63 +9,66 @@ permissions:
   contents: write
 
 jobs:
-  release-run:
+  publish-run:
+    # GitHub publishes the downloader. The kernel compiles on the user's machine.
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release-run]')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Test native installer and actual Debian package generator
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash -n scripts/infiltrator/package-run.sh
-          bash -n scripts/infiltrator/install-native.sh
-          bash tests/install-native.sh
-          bash tests/native-builddeb-paths.sh
-          bash tests/package-identity.sh
-          bash tests/repackage-native.sh
-          test -s docs/upstream/source-id
-
-      - name: Build source-bearing executable from this exact committed source
+      - name: Package tiny GitHub source downloader (no kernel compile)
         shell: bash
         env:
           INFILTRATOROS_TEMP_ROOT: ${{ runner.temp }}/InfiltratorOS
         run: |
           set -euo pipefail
+          bash -n scripts/infiltrator/package-run.sh
           bash scripts/infiltrator/package-run.sh
           version=$(tr -d '\r\n' < VERSION)
           out="$INFILTRATOROS_TEMP_ROOT/Kernel/Packages"
           installer="$out/InfiltratorOS-Kernel-$version-amd64.run"
           test -s "$installer"
+          # Prevent accidental return to 161 MB embedded-source design.
+          test "$(stat -c %s "$installer")" -lt 65536
+          bash -n "$installer"
+          grep -Fxq "expected_commit=$GITHUB_SHA" "$installer"
+          grep -Fq '/Temporary/InfiltratorOS' "$installer"
+          grep -Fq 'fetch --no-tags --depth 1 origin "$expected_commit"' "$installer"
           bash "$installer" --help | grep -Fq '/System/Kernel'
-          marker=$(awk '/^__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__$/ {print NR + 1; exit}' "$installer")
-          [[ "$marker" =~ ^[1-9][0-9]*$ ]]
-          tail -n "+$marker" "$installer" | xz -dc | tar -tf - > "$RUNNER_TEMP/source-files.txt"
-          for required in VERSION Makefile scripts/build-native.sh scripts/package/builddeb scripts/infiltrator/install-native.sh; do
-            grep -Fxq "$required" "$RUNNER_TEMP/source-files.txt"
-          done
-          (
-            cd "$out"
-            sha256sum "InfiltratorOS-Kernel-$version-amd64.run" > SHA256SUMS.txt
-            sha256sum --quiet -c SHA256SUMS.txt
-          )
+          if grep -Fq '__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__' "$installer"; then
+            echo 'ERROR: old embedded-source format detected'
+            exit 1
+          fi
+          (cd "$out" && sha256sum "InfiltratorOS-Kernel-$version-amd64.run" > SHA256SUMS.txt)
+          (cd "$out" && sha256sum --quiet -c SHA256SUMS.txt)
           echo "RUN_PATH=$installer" >> "$GITHUB_ENV"
           echo "SHA_PATH=$out/SHA256SUMS.txt" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
-          echo "PASS: full committed kernel source packed into executable .run"
-
-      - name: Publish to GitHub Releases without overwriting
+          echo "SIZE=$(stat -c %s "$installer")" >> "$GITHUB_ENV"
+          echo "PASS: tiny downloader, no kernel sources bundled or compiled on GitHub"
+      - name: Replace oversized public release asset
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "ERROR: $RELEASE_TAG exists; refusing overwrite"
-            exit 1
+            # --clobber deletes/replaces old large release asset by name.
+            gh release upload "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" --clobber
+            gh release edit "$RELEASE_TAG" \
+              --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
+              --notes "Tiny .run pinned to public Git commit $GITHUB_SHA. Executing it downloads the full Kernel source into /Temporary/InfiltratorOS/Kernel and compiles fresh on the user's own Linux machine, then installs native files under /System/Kernel unless --build-only is selected. The source is NOT embedded. This release job does NOT compile the kernel. Early development release; not a qualified bootable OS. Does not modify existing host /boot, EFI or NVRAM."
+          else
+            gh release create "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
+              --notes "Tiny .run downloads pinned Kernel source from GitHub at runtime, compiles on user's machine under /Temporary/InfiltratorOS/Kernel and installs native files under /System/Kernel. No kernel compilation on GitHub. This is an early development release."
           fi
-          gh release create "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" \
-            --target "$GITHUB_SHA" --prerelease \
-            --title "InfiltratorOS Kernel $RELEASE_TAG — source-bearing .run" \
-            --notes "Full committed source, fresh compiler build under /Temporary/InfiltratorOS/Kernel, verifies native image/headers/debug Debian packages and installs under /System/Kernel. Does not replace Mint kernel files, EFI or NVRAM. Early development build: full InfiltratorOS boot and native module runtime are not yet qualified. Use --build-only to compile without installing."
+          # Verify GitHub's public release now has exactly one small .run.
+          gh release view "$RELEASE_TAG" --json assets \
+            --jq '.assets[] | select(.name | endswith(".run")) | [.name, .size] | @tsv' \
+            > "$RUNNER_TEMP/published-run.txt"
+          test "$(wc -l < "$RUNNER_TEMP/published-run.txt")" -eq 1
+          actual_size=$(awk '{print $2}' "$RUNNER_TEMP/published-run.txt")
+          test "$actual_size" -eq "$SIZE"
+          test "$actual_size" -lt 65536
+          echo "PASS: public GitHub release replaced oversized source-bearing .run with $actual_size-byte downloader"
