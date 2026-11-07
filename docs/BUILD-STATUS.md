@@ -84,31 +84,32 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 
 **Current state (confirmed 2026-11-07):** **Full native kernel build and InfiltratorOS /System/Kernel staging both SUCCEEDED on the actual Mint laptop**, with three compiled Debian packages in `dist/` and native tree under `dist/native/System/Kernel/`. The files are still a **transitional Linux-derived build** and carry inherited `linux-image` package names and `7.0.14` kernel ABI numbering. These are **not yet the intended product-facing package names or versions**; migrate independently of the preserved successful baseline. No installation or boot qualification has occurred.
 
-## Next immediate action — package identity migration, preserve milestone
+18. **Native product package identities implemented and regression-tested in GitHub, 2026-11-07.** After the successful staging, the first-party `scripts/build-native.sh` now opts into a native mode in `scripts/package/mkdebian`. It generates *real Debian control and source metadata*, not renamed filenames: source package `infiltratoros-kernel`, package version `0.1.0-1`, image `infiltratoros-kernel-image-0.1.0`, headers `infiltratoros-kernel-headers-0.1.0`, and debug `infiltratoros-kernel-image-0.1.0-dbg`. `scripts/package/debian/rules` and `scripts/package/builddeb` recognise the native names. The existing exact kernel/module ABI `7.0.14-infiltrator` remains used for `/boot/vmlinuz-<ABI>`, modules, headers and module signing and is independently recorded in `X-InfiltratorOS-Module-ABI`. The native staging script now produces `InfiltratorOS-0.1.0.img`, `.config`, `.map`, keeps module ABI subdirectory and refuses to overwrite previous staging unless explicitly requested. Native staging defaults to `dist/native-0.1.0`, so the earlier `dist/native` baseline is preserved. A synthetic test exercises actual `mkdebian` generation, names, version and ABI metadata and protects upstream default mode; staging tests exercise old/new package selection, checksums and overwrite protection. GitHub Actions run `42356986972` **passed**. This is **source/contract test success**, not a second completed native Mint build of the new package names.
 
-With the first successful compile and staging verified, the next development
-task is **actual native package identity/versioning**, not another kernel compile.
-The InfiltratorOS Kernel component version is taken from this repository's
-`VERSION=0.1.0`; InfiltratorOS operating system integration has its own version;
-Linux `7.0.14-infiltrator` is a **transitional exact module ABI** needed by this
-first binary.
+**Current state (confirmed 2026-11-07):** The original full kernel build and `dist/native` staging **both succeeded** on the actual Linux Mint laptop, and their outputs are preserved. Native InfiltratorOS **package-name/version generator changes have CI-verified contracts**, but **newly named binary packages are not yet compiled or packaged on that laptop**, and no kernel has been installed or booted. The architecture destination remains a distinct InfiltratorOS kernel with deliberately supported Linux compatibility.
 
-Migrate the Debian package generator, binary package selection, image/headers
-and debug package names/metadata, module-header build paths and staging script
-as a matched, regression-tested change. Keep the original Linux ABI paths
-inside the binary until the independent InfiltratorOS loader, runtime module
-mechanism and boot pipeline are ready. Never simply rename `.deb` filenames.
+## Next immediate action — validate new identity safely
 
-**Do not start another full compilation just to change the package identity.**
-First validate generated Debian control files, builder selection, and native
-staging against small synthetic test packages in CI. The existing successful
-build outputs at `~/Kernel/dist/` and `~/Kernel/dist/native/` must not be
-deleted or overwritten by this work. Any future new native staging should
-write to a separate output path until proven.
+On the Mint test machine, bring source up to date and run the **short,
+synthetic contract checks without recompilation**:
 
-Keep `~/Kernel/.config`, compiler objects, `~/Kernel/.native-build/`,
-`~/Kernel/dist/`, and `~/Kernel-build-next.log`. No `make clean`,
-`mrproper`, `git clean`, kernel installation or bootloader modification.
+```bash
+cd ~/Kernel && git pull --ff-only && make check
+```
+
+If those succeed, the new real packaging identity generator and native staging
+contracts are verified on the host. **Do not automatically start another long
+kernel compile.** The subsequent optional qualification step is a separate
+incremental `make build-only SKIP_DEPS=1 JOBS=10`, which may reuse compiled
+objects but can still spend significant time generating Debian packages and
+debug symbols. Its new output must be verified before any native restaging;
+use separate `dist/native-0.1.0`, not the original `dist/native`.
+
+Original successful artifacts remain:
+`~/Kernel/dist/`, `~/Kernel/dist/native/`, source-tree compiler objects,
+`~/Kernel/.native-build/` and `~/Kernel-build-next.log`. Do not clean,
+delete, install or reboot to resolve identity. GitHub persists the source and
+this handoff, but **not** the original local compiled binary artifacts.
 
 ## Longer-term goals (not yet completed)
 
