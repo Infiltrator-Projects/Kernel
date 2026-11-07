@@ -80,8 +80,17 @@ legacy_images=()
 for deb in "$packages"/*.deb; do
   package=$(dpkg-deb -f "$deb" Package) || fail "Cannot inspect $deb"
   if [[ "$package" == "infiltratoros-kernel-image-$component_version" ]]; then
+    # Existing 0.1.0 packages were built with X-... source fields;
+    # dpkg-gencontrol silently omits those fields from the binary control.
+    # Do not reject an otherwise valid, previously compiled package solely
+    # because the optional metadata was not copied across.
     abi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI) || fail "Cannot inspect package ABI: $deb"
-    [[ "$abi" == "$release" ]] || fail "Native image package ABI ($abi) does not match built kernel ($release)"
+    if [[ -n "$abi" && "$abi" != "$release" ]]; then
+      fail "Native image package declares ABI $abi but built kernel is $release"
+    fi
+    if [[ -z "$abi" ]]; then
+      log "Package lacks the optional binary ABI field; validating actual boot image and module payload before staging"
+    fi
     images+=("$deb")
   elif [[ "$package" == "linux-image-$release" || "$package" == "linux-image-unsigned-$release" ]]; then
     # Read-only compatibility with the already successful Linux-named baseline.
@@ -114,13 +123,19 @@ for prefix in lib usr/lib; do
     break
   fi
 done
-if [[ -n "$module_path" ]]; then
-  # Native namespace is product-versioned. Module internals remain Linux-
-  # compatible pending a qualified native loader; exact ABI is metadata only.
-  mkdir -p "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version"
-  rsync -a --exclude='/build' --exclude='/source' "$module_path/" \
-    "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version/"
-fi
+[[ -n "$module_path" ]] ||
+  fail "Package $(basename "${images[0]}") has no modules under the exact compiled ABI $release; refusing to stage it"
+# A directory and release-shaped image alone are insufficient to validate a
+# compiled module package. Require at least one loadable module in the tree.
+found_module=$(find "$module_path" -type f \( -name '*.ko' -o -name '*.ko.*' \) -print -quit)
+[[ -n "$found_module" ]] ||
+  fail "Package contains no loadable modules under ABI $release"
+log "Verified exact compiled image and module payload for ABI $release"
+# Native namespace is product-versioned. Module internals remain Linux-
+# compatible pending a qualified native loader; exact ABI is metadata only.
+mkdir -p "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version"
+rsync -a --exclude='/build' --exclude='/source' "$module_path/" \
+  "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version/"
 # The two reserved namespaces must remain format-owner controlled.
 cat > "$tmp/result/STAGING-STATUS.txt" <<TEXT
 product=InfiltratorOS Kernel
