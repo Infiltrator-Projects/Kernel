@@ -60,41 +60,60 @@ independently retains the full source and validated development history.
 No USB drive, new OS installation or recompilation is required to correct
 the Debian package paths.
 
-## NEXT ACTION — repair the previously compiled native kernel packages
+## Source-bearing public `.run` installer — new GitHub publishing pipeline
 
-The original Linux-path `0.1.0-1` packages and their successful QEMU boot
-are immutable evidence. The **corrected GitHub source** now generates native
-`0.1.0-2` packages, with no payload under `/boot`, `/lib/modules`,
-`/usr/src` or `/usr/lib/debug`. The image and module payloads go to
-`/System/Kernel/Images/` and `/System/Kernel/Modules/`. Compiled developer
-headers and debug symbols go to `/System/Kernel/Headers/` and `/System/Kernel/Debug/`.
-These optional developer folders are documented in the OS-wide
-`InfiltratorOS/docs/FILESYSTEM.md` contract.
+The **release source is now defined entirely in GitHub**: the
+`scripts/infiltrator/package-run.sh` generator embeds `git archive HEAD`
+and creates `InfiltratorOS-Kernel-0.1.0-amd64.run`. The
+`.github/workflows/release-run.yml` workflow tests the native installer,
+generates the source-bearing `.run`, verifies its embedded files and
+SHA-256, and publishes it to GitHub Releases as an **early development**
+release. This file must be produced on GitHub, not by running a private
+local script on Shannon's machine.
 
-**Next real laptop command, not yet executed:**
+**One-file user workflow**: obtain the `.run` from the Kernel GitHub
+Releases page, make it executable, and execute it. There is no
+`~/Kernel` source tree required, and no old local compiler objects
+are used. The self-extracting file contains the **entire committed
+kernel source** and its first-party tools.
 
-```bash
-cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/repackage-native.sh
-```
+The executable creates its own isolated paths under
+`/Temporary/InfiltratorOS/Kernel/`:
 
-This uses the already verified binary snapshot, extracts the existing
-compiled image/modules/headers/debug, packages them in new **separate**
-`/Temporary/InfiltratorOS/Kernel/Packages/NativeLayout/InfiltratorOS-0.1.0/`
-files at Debian revision `0.1.0-2`, validates that **each** actual Debian
-archive contains only `/System/Kernel/` installation paths, records the exact
-transitional ABI and generates an independent SHA-256 manifest.
+- `Build/InfiltratorOS-Run.<unique>/Source` — unmodified embedded Git source
+- `Build/InfiltratorOS-Run.<unique>/obj` — completely new build objects
+- `Packages/InfiltratorOS-Run.<unique>/` — newly compiled image,
+  developer headers and debug Debian packages (version `0.1.0-2`)
+- `Staging/InfiltratorOS-Run.<unique>/` — SHA-verified native
+  image/module staging, not host installation
+- `Logs/InfiltratorOS-Run.<unique>.log` — complete compiler/install log
 
-It neither rebuilds the kernel nor runs `dpkg -i`, `apt install`, host
-kernel replacement, EFI modification, reboot or removal of the historical
-`0.1.0-1` package archives. An existing completed native `0.1.0-2` output
-is never overwritten. Only after this produces a **real on-laptop PASS**
-may we claim corrected native 0.1.0 binary packages have been produced.
+It compiles **fresh from source**, checks Debian package identities and
+payload paths to ensure nothing installs outside `/System/Kernel`, and
+runs `scripts/infiltrator/install-native.sh`. That installer extracts
+the validated image, modules, headers and debug to **/System/Kernel**
+without using host `dpkg -i`/APT, Linux kernel post-install hooks,
+`/boot`, `/lib/modules`, `/usr/src`, EFI or NVRAM. It refuses to
+overwrite an existing versioned kernel installation.
 
-**After repackaging:** perform a disposable VM test against the actual
-native package payload and qualify runtime module loading and a read/write
-root filesystem. The corrected path and package metadata alone do **not**
-make a fully installed, bootable InfiltratorOS distribution.
+`--build-only` makes the real compiler/test run without changing
+`/System/Kernel`; `--install-deps` optionally permits apt to install
+compiler dependencies. The default is fresh compilation **and**
+native file installation.
 
+**Qualifying limitation:** The actual source-bearing `.run` has not
+yet been executed on Shannon's physical machine and cannot be claimed
+as a completed working installation. The GitHub synthetic tests qualify
+the package path and isolated file installation only. A native bootable
+OS, runtime module loader and root filesystem require further work.
+
+## Keep the golden milestone distinct
+
+The already successful 0.1.0 kernel compilation and virtual boot,
+original `0.1.0-1` Linux-path Debian packages and independently
+verified local archive remain historical evidence and are never
+reused by the fresh `.run`. Source-of-truth for future builds is
+the public `main` GitHub commit embedded in each published installer.
 
 ## Required preservation rules
 
@@ -103,4 +122,4 @@ make a fully installed, bootable InfiltratorOS distribution.
 - Project-specific native user-facing paths use capitalised full names. Temporary staging belongs under `/Temporary/InfiltratorOS`; permanent kernel assets under `/System/Kernel`; independent shared filesystem engines under `/System/Filesystems`.
 - Never claim completed stages from CI checks alone. Real on-laptop success evidence is documented in [the complete build and qualification log](BUILD-STATUS.md).
 
-**For a future conversation:** Open this file and the full `docs/BUILD-STATUS.md` before editing anything. Resume at **actual native 0.1.0-2 repackaging** using the above command; then qualify native package payloads, isolated QEMU module/root operation and Boot/Setup installation. Off-device backup is optional and not an installation prerequisite. All earlier build, virtual-boot and home-cleanup steps are already complete.
+**For a future conversation:** Open this file and the full `docs/BUILD-STATUS.md` before editing anything. Resume by obtaining the source-bearing `.run` published through the public GitHub Release workflow, compiling fresh under /Temporary, inspecting and installing native package payloads to /System/Kernel; then qualify QEMU module/root operation and Boot/Setup. Never substitute a private ~/Kernel checkout or local repackaging for the public release. Off-device backup is optional and not an installation prerequisite. All earlier build, virtual-boot and home-cleanup steps are already complete.
