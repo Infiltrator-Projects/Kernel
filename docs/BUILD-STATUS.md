@@ -537,6 +537,65 @@ qualification**, and later deliberate Boot/Setup and single canonical
 filesystem `.so` bridge integration. The validated OVMF initramfs handoff
 should be retained as a golden regression rather than needlessly repeated.
 
+## Native filesystem placement audit — source confirmed, 2026-11-07
+
+Following review of the existing InfiltratorOS native filesystem specification
+(`InfiltratorOS/docs/FILESYSTEM.md`) and the current actual Kernel packaging
+scripts (`scripts/package/builddeb`, `scripts/build-native.sh`,
+`scripts/infiltrator/stage-native.sh`), it is **NOT correct to say that all
+Kernel files are installed under their final InfiltratorOS native directories**.
+
+* **Correct uninstalled native staging:** The successfully built kernel image
+  and modules were extracted to
+  `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/System/Kernel/`,
+  under `Images/` and the versioned `Modules/` directory. This tree is
+  a **staging copy**, not an activated installation.
+* **Canonical permanent target:** InfiltratorOS owns
+  `/System/Kernel/Images/`, `/System/Kernel/Modules/`,
+  `/System/Kernel/Filesystems/`, `/System/Kernel/Firmware/` and
+  independently provisioned `/System/Filesystems/*.so`. The last two
+  Kernel-staged directories remain empty/reserved; the generic runtime
+  filesystem `.so` bridge is not qualified. In particular, inherited
+  Linux filesystem `.ko` modules do not qualify as independently
+  provider-owned native `.so` engines.
+* **Unfixed actual `.deb` installation paths:** The current Debian image
+  package generator still runs `modules_install` using the inherited
+  `/lib/modules/<KERNELRELEASE>/` module tree and installs
+  `/boot/vmlinuz-<KERNELRELEASE>`, `/boot/config-...`,
+  `/boot/System.map-...`. Headers are placed under
+  `/usr/src/linux-headers-<KERNELRELEASE>/`, and debug binaries under
+  `/usr/lib/debug/`. Thus a Debian package installation would still
+  target conventional **Linux paths**, and cannot be presented as native
+  `/System/Kernel/` integration. The retained
+  `7.0.14-infiltrator` ABI is a real binary compatibility identifier.
+* **Historical build inputs and copies:** `~/Kernel/` source/Kbuild,
+  `~/Kernel/debian/` packaging workspace, `~/Kernel/dist/` historical
+  packages, and in-source compiled objects remain on the Mint host.
+  The working tree and old packages are preserved deliberately as evidence;
+  deleting or bulk-moving them would jeopardize proven compiler state.
+  `/Temporary/InfiltratorOS/Kernel/Tests/` and `.../Staging/`
+  are uninstalled test outputs; the verified copy at
+  `~/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0/`
+  is an explicit **durable user-owned backup**, not an installed OS path.
+* **Boot runtime:** Boot's packaged EFI executable presently lives under
+  `/usr/lib/infiltrator-boot/EFI/BOOT/` when installed on Linux Mint;
+  Boot itself documents an explicit ESP deployment procedure. The
+  already confirmed successful OVMF kernel test used a **temporary extracted**
+  copy instead of installing or modifying the ESP.
+* **Audit scope:** This finding directly covers the current Kernel,
+  native staging, archival and known Boot integration boundaries. It does
+  **not** certify every other independent InfiltratorOS application or
+  filesystem provider.
+
+**Action boundary:** Keep the verified build, original native `.deb`
+packages, SHA-256 archive, successful OVMF evidence, and entire original
+compiler object tree **untouched**. Designing a native package/deployment
+boundary must be an explicitly tested subsequent change, preferably by
+adding a new native package/staging mode in parallel, not retroactively
+renaming module ABI directories or changing existing proven binaries.
+Do not claim full native filesystem compliance merely because one
+`System/Kernel` extraction tree is correctly named.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
