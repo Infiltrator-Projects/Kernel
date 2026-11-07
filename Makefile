@@ -2287,7 +2287,11 @@ FORCE:
 # information in a variable so we can use it in if_changed and friends.
 .PHONY: $(PHONY)
 
-# InfiltratorOS build entry points; preserve all original Kbuild functionality.
+# InfiltratorOS build entry points.
+# Kbuild's initial make invocation already has a generic __sub-make recipe
+# for every explicitly requested goal. Define the Infiltrator recipes only
+# in the final invocation, or the wrapper executes them a second time.
+ifeq ($(need-sub-make),)
 .PHONY: probe configure-only build-only check
 probe:
 	@bash scripts/build-native.sh --probe
@@ -2297,3 +2301,4 @@ build-only:
 	@bash scripts/build-native.sh --build-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,)
 check:
 	@bash tests/check.sh
+endif
