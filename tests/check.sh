@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bash -n scripts/build-native.sh
+sh -n scripts/package/mkdebian
+sh -n scripts/package/builddeb
 # The real QEMU test is an explicit opt-in using disposable virtual images.
 # CI checks its syntax and pinned Boot release without altering host firmware.
 bash -n scripts/infiltrator/test-ovmf-handoff.sh

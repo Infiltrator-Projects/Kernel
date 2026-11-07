@@ -15,6 +15,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Validate native packaging syntax and generated Debian identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n scripts/package/mkdebian
+          sh -n scripts/package/builddeb
+          bash tests/package-identity.sh
+          bash tests/native-builddeb-paths.sh
       - name: Package tiny GitHub source downloader (no kernel compile)
         shell: bash
         env:

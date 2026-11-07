@@ -189,159 +189,12 @@ debug_package=linux-image-${KERNELRELEASE}-dbg
 if [ "${INFILTRATOROS_NATIVE_PACKAGE:-0}" = 1 ]; then
   native_identity=1
   product_version=${INFILTRATOROS_KERNEL_VERSION:-}
-  printf '%s\n' "$product_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+
-  sourcename=infiltratoros-kernel
-  # Revision -1 was proven to install in inherited Linux directories.
-  # Native -2 corrected the on-disk layout but still carried the imported
-  # Linux 7.0.14-infiltrator ABI. Revision -3 is the first independently
-  # versioned InfiltratorOS 0.1.0-infiltrator binary build.
-  packageversion=${product_version}-3
-  packagename=infiltratoros-kernel-image
-  release_suffix=$product_version
-  header_package=infiltratoros-kernel-headers-${product_version}
-  debug_package=infiltratoros-kernel-image-${product_version}-dbg
-  homepage=https://github.com/Infiltrator-Projects/Kernel
-  changelog_description='InfiltratorOS kernel development build from acknowledged source.'
-  image_description="InfiltratorOS kernel image, component version ${product_version}"
-  image_details=" InfiltratorOS kernel image and modules, independently versioned.
- InfiltratorOS module ABI: ${KERNELRELEASE}."
-  headers_description="InfiltratorOS kernel headers, component version ${product_version}"
-  debug_description="InfiltratorOS kernel debugging symbols, version ${product_version}"
-fi
-image_package=${packagename}-${release_suffix}
-
-debarch=
-set_debarch
-
-# Try to determine distribution
-if [ "${KDEB_CHANGELOG_DIST:+set}" ]; then
-        distribution=$KDEB_CHANGELOG_DIST
-# In some cases lsb_release returns the codename as n/a, which breaks dpkg-parsechangelog
-elif distribution=$(lsb_release -cs 2>/dev/null) && [ -n "$distribution" ] && [ "$distribution" != "n/a" ]; then
-        : # nothing to do in this case
-else
-        distribution="unstable"
-        echo >&2 "Using default distribution of 'unstable' in the changelog"
-        echo >&2 "Install lsb-release or set \$KDEB_CHANGELOG_DIST explicitly"
-fi
-
-echo $debarch > debian/arch
-
-host_gnu=$(dpkg-architecture -a "${debarch}" -q DEB_HOST_GNU_TYPE | sed 's/_/-/g')
-
-# Generate a simple changelog template
-cat <<EOF > debian/changelog
-$sourcename ($packageversion) $distribution; urgency=low
-
-  * $changelog_description
-
- -- $maintainer  $(date -R)
-EOF
-
-# Generate a control file
-cat <<EOF > debian/control
-Source: $sourcename
-Section: kernel
-Priority: optional
-Maintainer: $maintainer
-Rules-Requires-Root: no
-Build-Depends: debhelper-compat (= 12)
-Build-Depends-Arch: bc, bison, flex,
- gcc-${host_gnu} <!pkg.${sourcename}.nokernelheaders>,
- kmod, libdw-dev:native, libelf-dev:native,
- libssl-dev:native, libssl-dev <!pkg.${sourcename}.nokernelheaders>,
- python3:native, rsync
-Homepage: $homepage
-
-Package: $image_package
-Architecture: $debarch
-Description: $image_description
-$image_details
-EOF
-
-if [ "${SRCARCH}" != um ]; then
-# Linux libc-dev headers are part of the upstream compatibility toolchain,
-# not the independently versioned native kernel package family.
-if [ "$native_identity" -eq 0 ]; then
-cat <<EOF >> debian/control
-
-Package: linux-libc-dev
-Section: devel
-Provides: linux-kernel-headers
-Architecture: $debarch
-Description: Linux support headers for userspace development
- This package provides userspaces headers from the Linux kernel.  These headers
- are used by the installed headers for GNU glibc and other system libraries.
-Multi-Arch: same
-EOF
-fi
-
-if is_enabled CONFIG_MODULES; then
-cat <<EOF >> debian/control
-
-Package: $header_package
-Architecture: $debarch
-Build-Profiles: <!pkg.${sourcename}.nokernelheaders>
-Description: $headers_description
- This package provides kernel header files for ${KERNELRELEASE} on $debarch
- .
- This is useful for people who need to build external modules
-EOF
-fi
-fi
-
-if is_enabled CONFIG_DEBUG_INFO; then
-cat <<EOF >> debian/control
-
-Package: $debug_package
-Section: debug
-Architecture: $debarch
-Build-Profiles: <!pkg.${sourcename}.nokerneldbg>
-Description: $debug_description
- This package will come in handy if you need to debug the kernel. It provides
- all the necessary debug symbols for the kernel and its modules.
-EOF
-fi
-
-# Store the exact transitional module ABI as package metadata, distinct
-# from the independently versioned InfiltratorOS component.
-if [ "$native_identity" -eq 1 ]; then
-  # Add metadata to each generated paragraph after all packages are defined.
-  awk -v version="$product_version" -v abi="$KERNELRELEASE" '
-    /^Package: (infiltratoros-kernel-image-|infiltratoros-kernel-headers-)/ {
-      native=1
-    }
-    native && /^Architecture:/ {
-      print
-      # Debian source control requires the XB- prefix for fields copied
-      # into binary .deb control; dpkg-gencontrol strips this XB- prefix.
-      # Preserve the intended binary fields X-InfiltratorOS-*.
-      print "XB-X-InfiltratorOS-Kernel-Version: " version
-      print "XB-X-InfiltratorOS-Module-ABI: " abi
-      native=0
-      next
-    }
-    { print }
-  ' debian/control > debian/control.native
-  mv debian/control.native debian/control
-fi
-
-cat <<EOF > debian/rules.vars
-ARCH := ${ARCH}
-KERNELRELEASE := ${KERNELRELEASE}
-EOF
-
-cp "${srctree}/scripts/package/debian/copyright" debian/
-cp "${srctree}/scripts/package/debian/rules" debian/
-
-exit 0
- || {
+  if ! printf '%s\n' "$product_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     echo >&2 'InfiltratorOS packaging requires a semantic component version'
     exit 1
-  }
-  # VERSION is the InfiltratorOS kernel version, not upstream Linux 7.0.14.
-  # The native builder must propagate the same release to Kbuild, utsrelease,
-  # module vermagic, module installation and all three Debian package types.
+  fi
+  # Require the compiled kernel release and module ABI to match the product.
+  # The upstream Linux 7.0.14 version must not leak into native packages.
   if [ "$KERNELRELEASE" != "${product_version}-infiltrator" ]; then
     echo >&2 "Native InfiltratorOS package ABI mismatch: $KERNELRELEASE (expected ${product_version}-infiltrator)"
     exit 1
@@ -360,7 +213,7 @@ exit 0
   changelog_description='InfiltratorOS kernel development build from acknowledged source.'
   image_description="InfiltratorOS kernel image, component version ${product_version}"
   image_details=" InfiltratorOS kernel image and modules, independently versioned.
- Transitional module ABI: ${KERNELRELEASE}."
+ InfiltratorOS module ABI: ${KERNELRELEASE}."
   headers_description="InfiltratorOS kernel headers, component version ${product_version}"
   debug_description="InfiltratorOS kernel debugging symbols, version ${product_version}"
 fi
