@@ -347,6 +347,51 @@ ESP, host boot configuration, NVRAM or kernel packages. If needed, extract
 the verified release `.deb` into an isolated Temporary directory with
 `dpkg-deb -x` rather than installing it.
 
+## Isolated Boot/OVMF test prerequisites verified — Latitude 5550, 2026-11-07
+
+The latest Mint host probe showed:
+- `infiltrator-boot 0.1.38` **is installed**. Its EFI binary at
+  `/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI` is 313K and
+  identified as a PE32+ x86-64 EFI application.
+- No EFI file was found at
+  `/boot/efi/EFI/InfiltratorBoot/BOOTX64.EFI`. This is **not** a
+  problem; the test must not install to an ESP.
+- `/usr/bin/busybox` is **statically linked**, as required for Boot's
+  simple generated initramfs. The host has `qemu-system-x86_64`,
+  `mkfs.fat`, `mmd`, `mcopy` and OVMF 4M firmware files.
+- `/System/Filesystems/FAT16.so` is already installed and remains
+  independently owned by its filesystem provider.
+- The Boot repository's current published tagged release is **v0.1.39**
+  and provides `infiltrator-boot_0.1.39_amd64.deb` plus
+  `SHA256SUMS.txt`; the tag also contains its dedicated
+  `tests/test_so_boot.py` OVMF driver.
+
+The repository now contains
+`scripts/infiltrator/test-ovmf-handoff.sh`: an explicit **non-privileged,
+non-installing** bridge to the existing Boot 0.1.39 release-tagged test,
+using the **exact checksum-verified staged InfiltratorOS Kernel 0.1.0 image**.
+It retrieves the official Boot package, validates its release checksum,
+extracts `BOOTX64.EFI` in a unique named
+`/Temporary/InfiltratorOS/Kernel/Tests/` directory, and invokes Boot's
+existing FAT16.so QEMU/OVMF-to-test-initramfs harness. It retains the full
+test output and serial logs on success or failure and never touches
+the host's EFI partition, NVRAM, `/boot`, installed Boot 0.1.38,
+`/System/Kernel`, running kernel, original build objects or package binaries.
+
+**Next command, after latest GitHub CI reports passing:**
+
+```bash
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/test-ovmf-handoff.sh
+```
+
+Only an observed `BOOT-FAT16-SO-LINUX-HANDOFF-PASS` and
+`InfiltratorOS OVMF: PASS` from the real machine close the virtual
+handoff milestone. Source checks do **not** prove this test has run.
+If there is an error, preserve and inspect
+`/Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.*/`;
+do not rebuild or change the installed host's boot configuration
+in response.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
