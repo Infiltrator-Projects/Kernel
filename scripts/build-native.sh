@@ -56,8 +56,17 @@ else
   memory_jobs=$((mem / 2097152)); (( memory_jobs > 0 )) || memory_jobs=1
   jobs=$cpus; (( jobs <= memory_jobs )) || jobs=$memory_jobs
 fi
-work="$root/.native-build"; out="$root/dist"
-mkdir -p "$work" "$out"
+# InfiltratorOS owns /Temporary for all uninstalled work and packages.
+# Retain historic dist/ and .native-build/ untouched as evidence from the
+# first successful baseline; those are never destinations for new outputs.
+temporary_root=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
+[[ "$temporary_root" == /* && "$temporary_root" != / ]] || fail "Invalid native Temporary root: $temporary_root"
+native_workspace="$temporary_root/Kernel"
+work="$native_workspace/Build"
+out="$native_workspace/Packages"
+mkdir -p "$work" "$out" || fail "Cannot write $native_workspace; provision the native Temporary directory with user access"
+log "Temporary build workspace: $work"
+log "Uninstalled package output: $out"
 # A Mint baseline kept in Git must not block Debian machines whose running
 # kernel has another base version. Prefer matching source, then fetch exact.
 matches_running() {
@@ -115,11 +124,17 @@ log "Upstream kernel code: $base (distribution ABI: $running)"
 # Continue that *existing* in-tree build until the baseline is qualified;
 # new, clean checkouts continue to use .native-build/obj as intended.
 obj="$work/obj"
-mkdir -p "$obj"
+# Existing objects from earlier versions are never discarded merely because
+# we relocated *new* build work to /Temporary/InfiltratorOS/Kernel.
+if [[ -f "$root/.native-build/obj/.config" && -f "$root/.native-build/obj/include/config/auto.conf" ]]; then
+  obj="$root/.native-build/obj"
+  log "Reusing legacy out-of-tree compilation objects; leaving them in place"
+fi
 if [[ -f "$source_dir/.config" && -f "$source_dir/include/config/auto.conf" ]]; then
   obj="$source_dir"
-  log "Reusing existing in-source compilation objects left by the previous wrapper; no clean or rebuild requested"
+  log "Reusing existing in-source compilation objects; no clean or rebuild requested"
 fi
+mkdir -p "$obj"
 if [[ "$obj" == "$source_dir" ]]; then
   kbuild_args=(-C "$source_dir" LOCALVERSION=-infiltrator)
 else
@@ -160,9 +175,10 @@ bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" -j "$jobs" bi
 count=0
 manifest="$out/SHA256SUMS-infiltratoros-kernel-$product_version.txt"
 : > "$manifest"
-# bindeb-pkg places generated .debs in the parent of the active objtree:
-# .native-build for O= builds, or the parent of the source tree for legacy
-# in-tree builds. Scan only this build's actual output directory.
+# Kbuild writes its transitional Debian output beside the object tree.
+# On the historic in-source build this is the home directory. Copy verified
+# new products to native /Temporary; preserve older files rather than
+# deleting historical builds or modifying a running compilation.
 packages_dir=$(dirname "$obj")
 for deb in "$packages_dir"/*.deb; do
   [[ -f "$deb" ]] || continue
@@ -175,7 +191,7 @@ for deb in "$packages_dir"/*.deb; do
   (cd "$out" && sha256sum "$(basename "$deb")") >> "$manifest"
   count=$((count+1))
 done
-(( count > 0 )) || fail "Build completed but no InfiltratorOS Kernel $product_version .deb was found"
+(( count == 3 )) || fail "Expected image, headers and debug packages; found $count InfiltratorOS Kernel $product_version packages"
 printf '%s\n' "$obj" > "$work/last-completed-objtree"
 {
  echo "object_tree=$obj"
@@ -187,4 +203,4 @@ printf '%s\n' "$obj" > "$work/last-completed-objtree"
  echo "config_sha256=$(sha256sum "$config" | cut -d' ' -f1)"
  echo "installed_kernel=no"
 } > "$out/build-provenance-infiltratoros-kernel-$product_version.txt"
-log "Created $count InfiltratorOS Kernel $product_version .deb package(s) in dist/. No kernel was installed."
+log "Created $count InfiltratorOS Kernel $product_version .deb package(s) in $out. No kernel was installed."
