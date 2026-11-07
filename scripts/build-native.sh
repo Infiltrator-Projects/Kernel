@@ -5,14 +5,15 @@ set -euo pipefail
 fail() { echo "Kernel: ERROR: $*" >&2; exit 1; }
 log() { echo "Kernel: $*" >&2; }
 root=$(cd "$(dirname "$0")/.." && pwd -P)
-mode= source_dir= jobs= skip_deps=0
+mode= source_dir= jobs= skip_deps=0 object_dir= packages_dir= fresh_objects=0
 while (( $# )); do
   case "$1" in
     --probe|--configure-only|--build-only) [[ -z "$mode" ]] || fail "Select one mode"; mode=$1 ;;
-    --source-dir|--jobs) opt=$1; shift; (( $# )) || fail "Missing $opt argument"
-      case "$opt" in --source-dir) source_dir=$1 ;; --jobs) jobs=$1 ;; esac ;;
+    --source-dir|--jobs|--object-dir|--packages-dir) opt=$1; shift; (( $# )) || fail "Missing $opt argument"
+      case "$opt" in --source-dir) source_dir=$1 ;; --jobs) jobs=$1 ;; --object-dir) object_dir=$1 ;; --packages-dir) packages_dir=$1 ;; esac ;;
+    --fresh-objects) fresh_objects=1 ;;
     --skip-deps) skip_deps=1 ;;
-    --help|-h) echo "Usage: build-native.sh --probe | --configure-only | --build-only [--source-dir DIR] [--jobs N] [--skip-deps]"; exit 0 ;;
+    --help|-h) echo "Usage: build-native.sh --probe | --configure-only | --build-only [--source-dir DIR] [--jobs N] [--skip-deps] [--object-dir ABS_DIR --packages-dir ABS_DIR --fresh-objects]"; exit 0 ;;
     *) fail "Unknown option: $1" ;;
   esac
   shift
@@ -64,6 +65,23 @@ temporary_root=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
 native_workspace="$temporary_root/Kernel"
 work="$native_workspace/Build"
 out="$native_workspace/Packages"
+# A truly clean build must use an explicit never-before-used object tree and
+# output directory. This is how any Git clone can prove the compiler works;
+# none of the previously successful local .o files are required or reused.
+if (( fresh_objects )); then
+  [[ "$mode" == --build-only && -n "$object_dir" && -n "$packages_dir" ]] ||
+    fail '--fresh-objects requires --build-only, --object-dir and --packages-dir'
+  [[ "$object_dir" == "$native_workspace/Build/"* &&
+     "$packages_dir" == "$native_workspace/Packages/"* ]] ||
+    fail 'Fresh object and package directories must be below native /Temporary/InfiltratorOS/Kernel'
+  [[ ! -e "$object_dir" && ! -L "$object_dir" ]] ||
+    fail "Fresh object directory already exists: $object_dir"
+  [[ ! -e "$packages_dir" && ! -L "$packages_dir" ]] ||
+    fail "Fresh package directory already exists: $packages_dir"
+  out="$packages_dir"
+elif [[ -n "$object_dir" || -n "$packages_dir" ]]; then
+  fail '--object-dir and --packages-dir require --fresh-objects'
+fi
 mkdir -p "$work" "$out" || fail "Cannot write $native_workspace; provision the native Temporary directory with user access"
 log "Temporary build workspace: $work"
 log "Uninstalled package output: $out"
@@ -126,13 +144,17 @@ log "Upstream kernel code: $base (distribution ABI: $running)"
 obj="$work/obj"
 # Existing objects from earlier versions are never discarded merely because
 # we relocated *new* build work to /Temporary/InfiltratorOS/Kernel.
-if [[ -f "$root/.native-build/obj/.config" && -f "$root/.native-build/obj/include/config/auto.conf" ]]; then
+if (( ! fresh_objects )) && [[ -f "$root/.native-build/obj/.config" && -f "$root/.native-build/obj/include/config/auto.conf" ]]; then
   obj="$root/.native-build/obj"
   log "Reusing legacy out-of-tree compilation objects; leaving them in place"
 fi
-if [[ -f "$source_dir/.config" && -f "$source_dir/include/config/auto.conf" ]]; then
+if (( ! fresh_objects )) && [[ -f "$source_dir/.config" && -f "$source_dir/include/config/auto.conf" ]]; then
   obj="$source_dir"
   log "Reusing existing in-source compilation objects; no clean or rebuild requested"
+fi
+if (( fresh_objects )); then
+  obj="$object_dir"
+  log "Fresh isolated compile: O=$obj; no preserved build objects reused"
 fi
 # bindeb-pkg writes .deb, .changes and .buildinfo next to the
 # Kbuild object tree. When that tree is the repository ~/Kernel itself,
@@ -204,6 +226,10 @@ for deb in "$packages_dir"/*.deb; do
   esac
   abi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI)
   [[ "$abi" == "$release" ]] || fail "Package ABI mismatch for $deb: $abi (expected $release)"
+  if (( fresh_objects )); then
+    [[ $(dpkg-deb -f "$deb" Version) == "$product_version-2" ]] ||
+      fail "Fresh build yielded wrong package revision; expected $product_version-2: $deb"
+  fi
   target="$out/$(basename "$deb")"
   if [[ -e "$target" ]]; then
     cmp -s -- "$deb" "$target" || fail "Existing package preserved (different bytes): $target"
@@ -213,8 +239,14 @@ for deb in "$packages_dir"/*.deb; do
   (cd "$out" && sha256sum "$(basename "$deb")") >> "$manifest"
   count=$((count+1))
 done
-(( count > 0 )) || fail "No InfiltratorOS Kernel $product_version packages were generated"
-printf '%s\n' "$obj" > "$work/last-completed-objtree"
+if (( fresh_objects )); then
+  (( count == 3 )) || fail "Fresh build expected exact image, headers and debug packages; found $count"
+else
+  (( count > 0 )) || fail "No InfiltratorOS Kernel $product_version packages were generated"
+fi
+if (( ! fresh_objects )); then
+  printf '%s\n' "$obj" > "$work/last-completed-objtree"
+fi
 {
  echo "object_tree=$obj"
  echo "running_kernel=$running"
@@ -224,5 +256,7 @@ printf '%s\n' "$obj" > "$work/last-completed-objtree"
  echo "component_version=$product_version"
  echo "config_sha256=$(sha256sum "$config" | cut -d' ' -f1)"
  echo "installed_kernel=no"
+ echo "fresh_objects=$fresh_objects"
+ echo "source_commit=$(git -C "$root" rev-parse HEAD 2>/dev/null || echo exported-git-archive)"
 } > "$out/build-provenance-infiltratoros-kernel-$product_version.txt"
 log "Created $count InfiltratorOS Kernel $product_version .deb package(s) in $out. No kernel was installed."
