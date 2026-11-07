@@ -26,5 +26,6 @@ jobs:
           make -n probe | grep -F 'scripts/build-native.sh --probe'
           make -n configure-only SKIP_DEPS=1 | grep -F -- '--skip-deps'
           make -n build-only SKIP_DEPS=1 | grep -F -- '--skip-deps'
+          make -n build-only SKIP_DEPS=1 JOBS=1 | grep -F -- '--jobs 1'
           make -n stage-native | grep -F 'scripts/infiltrator/stage-native.sh'
           make -n package-run | grep -F 'scripts/infiltrator/package-run.sh'
