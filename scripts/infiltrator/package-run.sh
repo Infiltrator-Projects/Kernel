@@ -64,8 +64,57 @@ done
 temporary_root=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
 [[ "$temporary_root" == /* && "$temporary_root" != / ]] || fail 'Invalid Temporary root'
 workspace="$temporary_root/Kernel"
+# Bootstrap a completely clean machine. A normal user cannot create the
+# system-owned top-level /Temporary namespace without elevation. Obtain
+# elevation ONLY if directories are absent; never chown or reset an existing
+# directory, and never create a home-directory build tree.
+if [[ "$temporary_root" == /Temporary/InfiltratorOS ]]; then
+  for parent in /Temporary /Temporary/InfiltratorOS; do
+    if [[ -L "$parent" ]]; then
+      fail "Refusing symlinked system Temporary path: $parent"
+    fi
+    if [[ -e "$parent" && ! -d "$parent" ]]; then
+      fail "System Temporary path exists but is not a directory: $parent"
+    fi
+    if [[ ! -d "$parent" ]]; then
+      printf 'Creating missing system directory %s\n' "$parent"
+      if (( EUID == 0 )); then
+        install -d -m 0755 -- "$parent"
+      else
+        command -v sudo >/dev/null ||
+          fail "sudo is needed once to create missing system directory $parent"
+        sudo install -d -m 0755 -- "$parent" ||
+          fail "Could not create missing system directory $parent"
+      fi
+    fi
+  done
+  if [[ -L "$workspace" ]]; then
+    fail "Refusing symlinked Kernel workspace: $workspace"
+  fi
+  if [[ -e "$workspace" && ! -d "$workspace" ]]; then
+    fail "Kernel workspace exists but is not a directory: $workspace"
+  fi
+  if [[ ! -d "$workspace" ]]; then
+    printf 'Creating missing Kernel workspace %s\n' "$workspace"
+    if (( EUID == 0 )); then
+      install -d -m 0755 -- "$workspace"
+    else
+      sudo install -d -m 0755 -o "$(id -un)" -g "$(id -gn)" -- "$workspace" ||
+        fail "Could not create user-owned Kernel workspace $workspace"
+    fi
+  fi
+else
+  # Explicit custom Temporary root remains caller-owned. Do not sudo or
+  # change ownership of user-supplied external directories.
+  [[ ! -L "$temporary_root" && ! -L "$workspace" ]] ||
+    fail 'Refusing symlinked custom Temporary root/workspace'
+  mkdir -p -- "$workspace" ||
+    fail "Cannot create custom Temporary workspace: $workspace"
+fi
+[[ -w "$workspace" && -x "$workspace" ]] ||
+  fail "Native Kernel workspace is not writable by this user: $workspace"
 mkdir -p "$workspace/Build" "$workspace/Logs" "$workspace/Packages" "$workspace/Staging" ||
-  fail "Cannot create native Temporary workspace: $workspace"
+  fail "Cannot create native Temporary build directories: $workspace"
 work=$(mktemp -d "$workspace/Build/InfiltratorOS-Run.XXXXXXXX")
 source_dir="$work/Source"
 obj="$work/obj"
