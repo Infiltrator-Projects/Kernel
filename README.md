@@ -55,6 +55,40 @@ remain available.
 - `make stage-native` stages the uninstalled kernel image and modules under `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-<VERSION>/System/Kernel/`. The earlier `~/Kernel/dist/native/` compilation baseline is preserved unchanged.
 - `make package-run` produces a source-bearing local native `.run` builder in `/Temporary/InfiltratorOS/Kernel/Packages/` (not published automatically).
 
+## Preserve verified milestone outside Temporary
+
+The confirmed `0.1.0` image actually booted in QEMU/OVMF, but the
+compiled binary packages and virtual-machine evidence remain **on the
+local host**, some under `/Temporary/InfiltratorOS/`. GitHub preserves
+source and development history, not these binary files. Before beginning
+the next development milestone, perform a separately verified, non-destructive
+snapshot under the user's home directory:
+
+```bash
+cd ~/Kernel && git pull --ff-only
+bash scripts/infiltrator/preserve-milestone.sh \
+  --evidence /Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD
+```
+
+The output directory is `~/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0/`.
+It retains the historical first-build `dist/` outputs, the actual three
+InfiltratorOS Debian packages, the checksum-verified native
+`System/Kernel/` staged tree, real Boot/OVMF test output including the
+disposable media and serial log, any available full build logs, GitHub
+source commit identification, and a new verified SHA-256 archive manifest.
+
+**No live kernel, EFI partition, NVRAM, boot configuration or packaged source
+is modified. No source files or original test evidence are removed or moved.**
+The script refuses to overwrite an existing complete archive and retains an
+incomplete archival attempt for inspection rather than deleting source files.
+The user should confirm the **real host's** printed `PASS` before treating
+the binary archival milestone as complete.
+
+This creates a second local copy on the **same computer**, not an independent
+off-device backup. The source is separately protected in GitHub; fully
+protecting the compiled binary assets against physical disk failure requires
+a second physical device or another remote destination.
+
 ## Isolated UEFI handoff test — first successful run
 
 The Mint Latitude 5550 has a checksum-verified native staged kernel
