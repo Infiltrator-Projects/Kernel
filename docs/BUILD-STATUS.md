@@ -319,6 +319,34 @@ Boot-to-initramfs path. Boot's previous OVMF test results for other kernel
 images do not qualify this one. Never alter a live ESP, /boot, NVRAM,
 boot order, kernel modules or host root just to run this test.
 
+## Local QEMU/OVMF prerequisite inventory — Latitude 5550, 2026-11-07
+
+Shannon ran the read-only prerequisite inventory for the staged
+InfiltratorOS Kernel `0.1.0` Boot/OVMF handoff test and confirmed
+`/usr/bin/qemu-system-x86_64`, `/usr/sbin/mkfs.fat`, `/usr/bin/mmd`,
+`/usr/bin/mcopy`, and `/usr/bin/busybox` all exist. OVMF firmware exists
+at `/usr/share/OVMF/OVMF_CODE_4M.fd` and
+`/usr/share/OVMF/OVMF_VARS_4M.fd`, and the installed canonical filesystem
+engine `/System/Filesystems/FAT16.so` exists as a 630K executable file,
+dated 2026-11-06 19:48. The search
+`find "$HOME/Boot" -maxdepth 6 -type f \( -iname '*.efi' -o -name 'FAT16.so' \)`
+returned **no candidates**, which only establishes that no EFI executable
+was found under that path: it does not prove Boot is not installed.
+
+The Boot repository's existing `tests/test_so_boot.py` accepts an explicit
+`--boot` executable, `--module`, `--kernel`, `--output`, and `--ovmf`,
+creates disposable FAT16/ESP images and a test initramfs, runs QEMU/OVMF and
+looks for an initramfs marker. The Boot project's most recent release checked
+during this review is `v0.1.39` with a published
+`infiltrator-boot_0.1.39_amd64.deb`, which contains the Boot runtime
+under `/usr/lib/infiltrator-boot/EFI/BOOT/`. The next step is to locate
+a **verified, current EFI executable**, checking that packaged installed path
+(and the removable ESP copy if appropriate), and ensure the BusyBox binary
+is self-contained/static for the tiny generated initramfs. Do not alter any
+ESP, host boot configuration, NVRAM or kernel packages. If needed, extract
+the verified release `.deb` into an isolated Temporary directory with
+`dpkg-deb -x` rather than installing it.
+
 ## Longer-term goals (not yet completed)
 
 - Finish and boot-qualify the first InfiltratorOS kernel baseline.
