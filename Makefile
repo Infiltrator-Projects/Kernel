@@ -291,7 +291,7 @@ endif
 version_h := include/generated/uapi/linux/version.h
 
 clean-targets := %clean mrproper cleandocs
-no-dot-config-targets := $(clean-targets) probe configure-only build-only check \
+no-dot-config-targets := $(clean-targets) probe configure-only build-only stage-native package-run check \
 			 cscope gtags TAGS tags help% %docs check% coccicheck \
 			 $(version_h) headers headers_% archheaders archscripts \
 			 %asm-generic kernelversion %src-pkg dt_binding_check \
@@ -2292,13 +2292,17 @@ FORCE:
 # for every explicitly requested goal. Define the Infiltrator recipes only
 # in the final invocation, or the wrapper executes them a second time.
 ifeq ($(need-sub-make),)
-.PHONY: probe configure-only build-only check
+.PHONY: probe configure-only build-only stage-native package-run check
 probe:
 	@bash scripts/build-native.sh --probe
 configure-only:
 	@bash scripts/build-native.sh --configure-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,)
 build-only:
 	@bash scripts/build-native.sh --build-only $(if $(filter 1,$(SKIP_DEPS)),--skip-deps,)
+stage-native:
+	@bash scripts/infiltrator/stage-native.sh
+package-run:
+	@bash scripts/infiltrator/package-run.sh
 check:
 	@bash tests/check.sh
 endif
