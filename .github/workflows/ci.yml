@@ -48,3 +48,22 @@ jobs:
           bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$obj" "$obj/.config"
           test -s "$obj/include/config/auto.conf"
           echo "PASS: real Kbuild prepare materialises verified effective .config"
+
+      - name: Prove nested native Make respects an isolated O= directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          obj="$RUNNER_TEMP/infiltrator-nested-kbuild-test"
+          # Reproduce the exact inherited sentinel from 'make configure-only':
+          # without the reset wrapper, Kbuild ignores O= and writes in src.
+          env sub_make_done=1 bash scripts/infiltrator/run-kbuild.sh O="$obj" x86_64_defconfig
+          test -s "$obj/.config"
+          scripts/config --file "$obj/.config" --set-str SYSTEM_TRUSTED_KEYS debian/ci-absent-certs.pem
+          scripts/config --file "$obj/.config" --set-str SYSTEM_REVOCATION_KEYS debian/ci-absent-revocations.pem
+          bash scripts/infiltrator/prepare-certificates.sh "$PWD" "$obj"
+          env sub_make_done=1 bash scripts/infiltrator/run-kbuild.sh O="$obj" LOCALVERSION=-infiltrator olddefconfig
+          env sub_make_done=1 bash scripts/infiltrator/run-kbuild.sh O="$obj" LOCALVERSION=-infiltrator prepare
+          bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$obj" "$obj/.config"
+          test -s "$obj/include/config/auto.conf"
+          test -s "$obj/include/generated/autoconf.h"
+          echo "PASS: nested Kbuild build wrapper preserves O= object directory"
