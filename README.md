@@ -29,13 +29,23 @@ engines remain owned by their independent Filesystem-* repositories.
 - `make build-only` compiles InfiltratorOS-versioned Debian image, headers and debug packages, without installation. The embedded module ABI remains transitional.
 - `make check` checks the first-party build script syntax and contract (not the kernel).
 
+Native **uninstalled** build outputs are under `/Temporary/InfiltratorOS/Kernel/`:
+`Build/` for new object-tree work, `Packages/` for locally built
+artifacts, `Staging/InfiltratorOS-<VERSION>/System/Kernel/` for the
+future installed layout, and `Logs/` for logs from the native runner.
+The host's actual `/System/Kernel/` is reserved for a qualified installer,
+never written by these commands. The historic `dist/` and in-source
+compiler objects are preserved for the first proven baseline. Underlying
+module vermagic remains a transitional Linux ABI; changing staged directory
+names does not implement a new kernel ABI or loader.
+
 The first-party scripts use APT build dependencies on Debian/Linux Mint
 and need the appropriate deb-src entries. They do not change the running
 kernel or boot configuration. The first-party builder is
 `scripts/build-native.sh`. The Linux kernel's normal Kbuild targets
 remain available.
 
-- `make stage-native` stages compiled image and modules under a versioned `dist/native-<VERSION>/System/Kernel/`, preserving the original successful `dist/native/` baseline.
-- `make package-run` produces a source-bearing local native `.run` builder in `dist/` (not published automatically).
+- `make stage-native` stages the uninstalled kernel image and modules under `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-<VERSION>/System/Kernel/`. The earlier `~/Kernel/dist/native/` compilation baseline is preserved unchanged.
+- `make package-run` produces a source-bearing local native `.run` builder in `/Temporary/InfiltratorOS/Kernel/Packages/` (not published automatically).
 
 [Native InfiltratorOS Kernel source and installed-file contract](docs/NATIVE-LAYOUT.md) specifies the `/System/Kernel/{Images,Modules,Filesystems,Firmware}` layout. Staging and `.run` compilation do **not** install or boot a kernel; Boot/Setup integration is still outstanding.
