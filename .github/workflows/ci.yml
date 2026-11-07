@@ -83,3 +83,15 @@ jobs:
           bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$PWD" "$PWD/.config"
           test -s include/config/auto.conf
           echo "PASS: in-tree prepared config accepts inactive module signing key defaults"
+
+          # With signing enabled Kbuild's auto.conf intentionally has
+          # unquoted string values. Verify the exact format from the real
+          # configuration generator, not a hand-authored approximation.
+          scripts/config --file .config --enable MODULES --enable MODULE_SIG
+          scripts/config --file .config --set-str MODULE_SIG_KEY certs/signing_key.pem
+          env -u sub_make_done make LOCALVERSION=-infiltrator olddefconfig
+          env -u sub_make_done make LOCALVERSION=-infiltrator prepare
+          grep -Fxq 'CONFIG_MODULE_SIG_KEY="certs/signing_key.pem"' .config
+          grep -Fxq 'CONFIG_MODULE_SIG_KEY=certs/signing_key.pem' include/config/auto.conf
+          bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$PWD" "$PWD/.config"
+          echo "PASS: real quoted .config and unquoted auto.conf values match"
