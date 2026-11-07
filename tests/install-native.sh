@@ -21,7 +21,7 @@ for name in "infiltratoros-kernel-image-$version" \
   p="$sandbox/Package"
   cat > "$p/DEBIAN/control" <<EOF
 Package: $name
-Version: $version-2
+Version: $version-3
 Architecture: amd64
 Maintainer: InfiltratorOS Test <test@example.invalid>
 X-InfiltratorOS-Module-ABI: $abi
