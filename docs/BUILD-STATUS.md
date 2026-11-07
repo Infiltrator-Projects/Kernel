@@ -487,18 +487,49 @@ to overwrite, and unchanged originals. A previous interrupted copy
 remains visibly marked `.Incomplete` rather than being mistaken for
 a fully verified archive.
 
-**Next actual laptop command — not yet reported executed:**
+**ACTUAL ARCHIVAL SUCCESS CONFIRMED ON LATITUDE 5550 — 2026-11-07**
+
+Shannon executed the safe archive script after fast-forwarding Kernel `main`
+to commit `39827c75d`:
 
 ```bash
 cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/preserve-milestone.sh \
   --evidence /Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD
 ```
 
-Do **not** claim the second durable binary copy exists until the laptop
-prints `InfiltratorOS Kernel archive: PASS` and gives the final path.
-This remains a backup on the **same physical laptop**, not off-device
-protection from drive loss; GitHub independently holds the full source.
-Do not clean `dist/` or `/Temporary/InfiltratorOS` afterwards.
+The first invocation printed:
+
+```text
+InfiltratorOS Kernel archive: Verifying the original staged artifact checksums
+InfiltratorOS Kernel archive: Copying original successful Debian packages and historical build outputs
+InfiltratorOS Kernel archive: Copying the SHA-256 verified native Kernel staging tree
+InfiltratorOS Kernel archive: Copying successful QEMU/OVMF evidence and disposable test media
+InfiltratorOS Kernel archive: Verifying archived staged kernel, boot-test marker and actual package identities
+InfiltratorOS Kernel archive: PASS: preserved binary packages, staging, VM evidence and build logs at /home/ssmith/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0
+InfiltratorOS Kernel archive: Original build files and successful VM evidence remain unchanged.
+```
+
+A **second invocation was also observed** and was correctly rejected by
+the immutable-archive guard:
+
+```text
+InfiltratorOS Kernel archive: ERROR: Previous verified archive preserved at /home/ssmith/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0; refusing to overwrite it
+```
+
+**This rejection is expected and demonstrates the overwrite protection;
+it is not an archival failure.** The actual first archive has been
+created and verified under
+`/home/ssmith/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0/`.
+No further archival run is required for this milestone.
+
+**Important backup boundary:** The original `~/Kernel/dist/`,
+staging, source/compiler objects and original virtual machine evidence
+remain in their existing locations, and the durable archive is an
+additional copy on the **same laptop disk**. GitHub independently stores
+source and this technical handoff, **not the compiled binary archive**.
+An independent storage device or remote backup remains needed for
+protection against complete laptop storage failure. Do not clean
+`dist/`, `/Temporary/InfiltratorOS` or the archive.
 
 Once the binary backup is confirmed, the next kernel engineering milestone
 is **isolated QEMU runtime module-loading and read/write root-filesystem
