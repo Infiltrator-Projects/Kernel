@@ -114,4 +114,30 @@ fi
 grep -Fq 'Compiled boot image not found' "$sandbox/wrong-abi.log"
 [[ ! -e "$sandbox/native-wrong-abi" ]]
 
-echo 'PASS: native Temporary staging, legacy ABI metadata fallback, payload checks and preservation'
+# New native-layout -2 .deb packages must also be accepted as staging inputs
+# without depending on /boot or /lib/modules in the extracted package.
+mkdir -p "$sandbox/native2pkg/DEBIAN" \
+  "$sandbox/native2pkg/System/Kernel/Images" \
+  "$sandbox/native2pkg/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers" \
+  "$sandbox/native2packages"
+cat > "$sandbox/native2pkg/DEBIAN/control" <<EOF_NATIVE2
+Package: infiltratoros-kernel-image-0.1.0
+Version: 0.1.0-2
+Architecture: amd64
+Maintainer: InfiltratorOS test harness <noreply@example.invalid>
+X-InfiltratorOS-Kernel-Version: 0.1.0
+X-InfiltratorOS-Module-ABI: $release
+Description: Proper native installation paths fixture
+EOF_NATIVE2
+printf 'correct native image\n' > "$sandbox/native2pkg/System/Kernel/Images/InfiltratorOS-0.1.0.img"
+printf 'correct native config\n' > "$sandbox/native2pkg/System/Kernel/Images/InfiltratorOS-0.1.0.config"
+printf 'correct native .ko\n' > "$sandbox/native2pkg/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/native2.ko"
+dpkg-deb --build "$sandbox/native2pkg" "$sandbox/native2packages/real-native-path.deb" >/dev/null
+bash scripts/infiltrator/stage-native.sh --packages "$sandbox/native2packages" \
+  --objects "$sandbox/obj" --output "$sandbox/re-staged-native2"
+grep -Fxq 'correct native image' "$sandbox/re-staged-native2/System/Kernel/Images/InfiltratorOS-0.1.0.img"
+grep -Fxq 'correct native config' "$sandbox/re-staged-native2/System/Kernel/Images/InfiltratorOS-0.1.0.config"
+grep -Fxq 'correct native .ko' "$sandbox/re-staged-native2/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel/drivers/native2.ko"
+[[ ! -e "$sandbox/re-staged-native2/boot" && ! -e "$sandbox/re-staged-native2/lib" ]]
+(cd "$sandbox/re-staged-native2" && sha256sum --quiet -c SHA256SUMS.txt)
+echo 'PASS: native Temporary staging, old Linux-path and new native-path package inputs, ABI validation and preservation'
