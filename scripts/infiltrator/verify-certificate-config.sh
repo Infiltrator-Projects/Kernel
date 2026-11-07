@@ -13,9 +13,16 @@ config_file=$3
 auto_config="$object_tree/include/config/auto.conf"
 [[ -f "$config_file" ]] || { echo "Kernel: ERROR: missing final .config" >&2; exit 1; }
 [[ -f "$auto_config" ]] || { echo "Kernel: ERROR: missing generated auto.conf; regenerate config before compiling" >&2; exit 1; }
+# .config quotes strings, while include/config/auto.conf does not.
+# The distinction is in scripts/kconfig/confdata.c (escape_string true/false).
+# Normalize both forms before comparing; never evaluate the string contents.
 value() {
-  local key=$1 file=$2
-  sed -n "s/^CONFIG_${key}=\"\\(.*\\)\"$/\\1/p" "$file" | head -n 1
+  local key=$1 file=$2 raw
+  raw=$(awk -v prefix="CONFIG_${key}=" 'index($0,prefix)==1 {print substr($0,length(prefix)+1); exit}' "$file")
+  if (( ${#raw} >= 2 )) && [[ ${raw:0:1} == '"' && ${raw: -1} == '"' ]]; then
+    raw=${raw:1:${#raw}-2}
+  fi
+  printf '%s' "$raw"
 }
 # Kconfig only exports *active* options to auto.conf. The saved .config
 # may still contain a string default for a symbol whose dependencies are off.
@@ -35,6 +42,10 @@ active_setting() {
   esac
 }
 for key in SYSTEM_TRUSTED_KEYS SYSTEM_REVOCATION_KEYS MODULE_SIG_KEY; do
+  # Dormant Kconfig strings retained in .config are not effective inputs.
+  if ! active_setting "$key"; then
+    continue
+  fi
   configured=$(value "$key" "$config_file")
   if ! grep -q "^CONFIG_${key}=" "$auto_config"; then
     if active_setting "$key"; then
