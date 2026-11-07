@@ -149,8 +149,14 @@ This follows the existing InfiltratorOS authority:
 │       └── kernel/.../*.ko
 ├── Filesystems/
 │   └── <format>.ko                 (owned by Filesystem-*; not this package)
-└── Firmware/
-    └── ...                         (only verified firmware from its owner)
+├── Firmware/
+│   └── ...                         (only verified firmware from its owner)
+├── Headers/
+│   └── InfiltratorOS-<component-version>/
+│       └── ...                     (optional compiled developer headers)
+└── Debug/
+    └── InfiltratorOS-<component-version>/
+        └── ...                     (optional compiled debug symbols)
 ```
 
 The `Modules/InfiltratorOS-<component-version>/` hierarchy identifies the
@@ -160,6 +166,20 @@ module-loader search path. The `Filesystems/` namespace is reserved for the
 individual filesystem-provider builds and is not populated by copying every
 upstream Linux filesystem module there. EFI BOOT binaries and firmware-stage
 drivers belong to the independent **Boot** component, not this repository.
+
+The native `0.1.0-2` installable Debian payload contract deliberately
+**differs** from the historical `0.1.0-1` Linux-path Debian packages.
+The old packages and confirmed boot evidence remain preserved and unchanged.
+The corrected `scripts/package/builddeb` generator and the
+no-compile `scripts/infiltrator/repackage-native.sh` converter make
+all three image, headers and debug package payloads live exclusively
+inside `/System/Kernel/`. Native image/modules install in `Images`
+and `Modules`; optional developer files in `Headers` and `Debug`.
+All these are defined in the authoritative OS filesystem contract.
+Native packages have **no** legacy Debian kernel maintainer hooks that
+could change the host's initramfs, bootloader or kernel configuration.
+This establishes file placement only; native runtime module loading and
+Boot/Setup installation remain separate qualifications.
 
 The transitional kernel image and modules currently retain Linux ABI
 dependencies. Their native staging paths are **not yet a usable replacement
