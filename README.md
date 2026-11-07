@@ -55,79 +55,49 @@ kernel or boot configuration. The first-party builder is
 remain available.
 
 - `make stage-native` stages the uninstalled kernel image and modules under `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-<VERSION>/System/Kernel/`. The earlier `~/Kernel/dist/native/` compilation baseline is preserved unchanged.
-- `make package-run` produces a source-bearing local native `.run` builder in `/Temporary/InfiltratorOS/Kernel/Packages/` (not published automatically).
+- `make package-run` produces a small network-downloading `.run` under `/Temporary/InfiltratorOS/Kernel/Packages/`; GitHub Releases distributes the exact committed version.
 
-## Preserve verified milestone outside Temporary
+## Install and compile from GitHub (native InfiltratorOS 0.1.0)
 
-The confirmed `0.1.0` image actually booted in QEMU/OVMF, but the
-compiled binary packages and virtual-machine evidence remain **on the
-local host**, some under `/Temporary/InfiltratorOS/`. GitHub preserves
-source and development history, not these binary files. Before beginning
-the next development milestone, perform a separately verified, non-destructive
-snapshot under the user's home directory:
+The **public .run download** is available from
+[Kernel v0.1.0 Releases](https://github.com/Infiltrator-Projects/Kernel/releases/tag/v0.1.0).
+The small executable contains a pinned public Git commit and download/build
+logic; it **does not** embed the kernel source or require `~/Kernel`.
+When launched on a compatible Linux machine, it downloads that exact
+source commit, compiles with the **local** kernel toolchain in
+`/Temporary/InfiltratorOS/Kernel/Build/`, creates and verifies native
+Debian packages under `/Temporary/InfiltratorOS/Kernel/Packages/`,
+and installs native files only under `/System/Kernel/`. The installer
+automatically creates missing temporary folders. GitHub only publishes
+the downloader; it does not compile or test the kernel for the user.
 
-```bash
-cd ~/Kernel && git pull --ff-only
-bash scripts/infiltrator/preserve-milestone.sh \
-  --evidence /Temporary/InfiltratorOS/Kernel/Tests/InfiltratorOS-0.1.0-OVMF.n30ks8BD
-```
+**Kernel identity:** InfiltratorOS Kernel **0.1.0** has the native
+kernel release and compiled module ABI **`0.1.0-infiltrator`**,
+not `7.0.14-infiltrator`. The source tree is based on Ubuntu/Linux
+**7.0.14**, which remains unchanged internally for Linux API and code
+compatibility. It is an upstream source version, **not** a historical
+InfiltratorOS release. The first-party builder explicitly sets
+`KERNELRELEASE=0.1.0-infiltrator` and verifies the generated UTS
+release header before compiling. Native package generation rejects the
+old `7.0.14-infiltrator` identity.
 
-The output directory is `~/InfiltratorOS-Kernel-Archive/InfiltratorOS-Kernel-0.1.0/`.
-It retains the historical first-build `dist/` outputs, the actual three
-InfiltratorOS Debian packages, the checksum-verified native
-`System/Kernel/` staged tree, real Boot/OVMF test output including the
-disposable media and serial log, any available full build logs, GitHub
-source commit identification, and a new verified SHA-256 archive manifest.
+The new corrected Debian package **revision `0.1.0-3`** distinguishes
+these binaries from the previous `-1` wrong-install-path packages
+and the `-2` correct-path packages with an inherited Linux version.
+Those revisions are Debian packaging identifiers, not OS versions.
 
-**No live kernel, EFI partition, NVRAM, boot configuration or packaged source
-is modified. No source files or original test evidence are removed or moved.**
-The script refuses to overwrite an existing complete archive and retains an
-incomplete archival attempt for inspection rather than deleting source files.
-The user should confirm the **real host's** printed `PASS` before treating
-the binary archival milestone as complete.
+**Verification status:** The version correction is committed in Git,
+but a complete fresh kernel compile **using this revised code** has
+not yet been demonstrated on a physical machine. The earlier QEMU
+boot milestone is preserved as historical evidence only. The public
+`.run` may also use `--build-only` to compile and verify without
+installing. Actual boot activation, root-filesystem access and native
+module loading are not yet qualified. Existing host `/boot`, Linux
+modules, EFI and NVRAM are not modified by the native installer.
+Existing versioned native files are not silently overwritten.
 
-This creates a second local copy on the **same computer**, not an independent
-off-device backup. The source is separately protected in GitHub; fully
-protecting the compiled binary assets against physical disk failure requires
-a second physical device or another remote destination.
-
-## Corrected native Debian packages — no kernel rebuild required
-
-**Important historical distinction:** The original successfully compiled
-Kernel `0.1.0-1` packages used inherited Linux installation paths
-(`/boot`, `/lib/modules`, `/usr/src`, `/usr/lib/debug`). Simply
-copying their image/modules into native staging did not fix the actual Debian
-package. These `-1` packages and their successful QEMU boot evidence remain
-preserved and must **never** be overwritten or silently reinstalled.
-
-The `scripts/package/builddeb` native mode now writes actual native
-`0.1.0-2` package payloads exclusively under `/System/Kernel/`, with
-image and modules in `Images/` and `Modules/`, optional development
-headers in `Headers/`, and debug symbols in `Debug/`. These paths are
-specified by the authoritative OS filesystem contract. The new native
-packages have no inherited Debian `/etc/kernel` or `/usr/share/kernel`
-post-install hooks.
-
-**Use the original compiled binaries instead of rebuilding:**
-
-```bash
-cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/repackage-native.sh
-```
-
-This verifies the already archived first kernel image and original three
-Debian packages, creates new `0.1.0-2` image/headers/debug packages under
-`/Temporary/InfiltratorOS/Kernel/Packages/NativeLayout/InfiltratorOS-0.1.0/`,
-inspects their **actual payload paths**, and generates a SHA-256 manifest.
-The old `-1` files remain immutable; this does not compile, install,
-modify Mint's boot configuration or boot the new package. The end-to-end
-synthetic Debian tests are `tests/repackage-native.sh` and
-`tests/native-builddeb-paths.sh`.
-
-**This source fix is committed, but a successful real laptop repackaging
-has not yet been observed.** A properly located Debian payload is a file
-placement improvement, not proof that InfiltratorOS is fully bootable or
-that its eventual kernel module loader and native Boot/Setup installer are
-complete.
+See [the updated milestone and verification boundary](docs/MILESTONE-0.1.0.md)
+and [native filesystem contract](docs/NATIVE-LAYOUT.md).
 
 ## Isolated UEFI handoff test — first successful run
 
