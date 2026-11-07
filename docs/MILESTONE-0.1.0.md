@@ -28,7 +28,7 @@ This is a Linux-derived transitional kernel, not yet an independently implemente
 
 - No successful **full installed InfiltratorOS system boot**; the physical Mint laptop's running kernel, EFI partition, NVRAM and boot order were not changed.
 - No qualification yet for **runtime kernel module loading**, a **read/write root filesystem**, physical hardware driver selection, Secure Boot or a recovery-capable OS installation.
-- The **actual existing 0.1.0 Debian packages retain conventional Linux installation paths** (e.g. `/boot`, `/lib/modules`, `/usr/src`). The native `/System/Kernel/{Images,Modules,Filesystems,Firmware}` **staging** hierarchy is correct, but native **package deployment** is not finished.
+- The **historical 0.1.0-1 Debian binaries retain Linux installation paths** (`/boot`, `/lib/modules`, `/usr/src`). The GitHub native package generator is now corrected for **0.1.0-2** to use only `/System/Kernel/{Images,Modules,Filesystems,Firmware,Headers,Debug}`. A no-recompile archive-to-native repacker and synthetic tests have been added. The actual native **0.1.0-2 package set has not yet been generated and checked on Shannon's laptop**, nor have native module loading and Boot/Setup installation been qualified.
 - The generic kernel adapter to consume the independent canonical filesystem `.so` is not implemented/qualified; transitional `.ko` modules are not final native filesystem support.
 - **Off-machine binary backup is NOT confirmed.** Both original artifacts and their verified archive are on the Latitude 5550's storage. GitHub holds the source and evidence, not those large `.deb` packages or virtual disk images.
 
@@ -54,34 +54,47 @@ on the Mint Latitude 5550. The machine currently reports:
   external destination**. Network mounts were not assessed by this
   command; no off-machine backup has been proven.
 
-**Actual next step:** Ask Shannon to identify and connect a suitable
-external storage device, or identify an approved network share. Use a
-read-only storage listing again, confirm the exact safe target and
-capacity against `du -sh ~/InfiltratorOS-Kernel-Archive`, then
-copy/check the entire verified archive without modifying any current
-disk partitions or original files. Do not mistake a second internal
-NVMe for an off-machine backup. Continue native Kernel runtime work
-after the independently verified copy is complete; the original QEMU
-milestone is already preserved and must not be rebuilt needlessly.
+**Off-machine backup is optional** for continuing this development. Both
+the original and copied binaries are on the same laptop, but GitHub
+independently retains the full source and validated development history.
+No USB drive, new OS installation or recompilation is required to correct
+the Debian package paths.
 
-## Next action — protect the actual binaries
+## NEXT ACTION — repair the previously compiled native kernel packages
 
-**Do not compile or clean anything.** Identify an independently mounted removable disk or remote filesystem:
+The original Linux-path `0.1.0-1` packages and their successful QEMU boot
+are immutable evidence. The **corrected GitHub source** now generates native
+`0.1.0-2` packages, with no payload under `/boot`, `/lib/modules`,
+`/usr/src` or `/usr/lib/debug`. The image and module payloads go to
+`/System/Kernel/Images/` and `/System/Kernel/Modules/`. Compiled developer
+headers and debug symbols go to `/System/Kernel/Headers/` and `/System/Kernel/Debug/`.
+These optional developer folders are documented in the OS-wide
+`InfiltratorOS/docs/FILESYSTEM.md` contract.
+
+**Next real laptop command, not yet executed:**
 
 ```bash
-lsblk -o NAME,TRAN,TYPE,SIZE,FSTYPE,LABEL,MOUNTPOINTS
+cd ~/Kernel && git pull --ff-only && bash scripts/infiltrator/repackage-native.sh
 ```
 
-Once the correct external mount is positively identified, copy **the entire**
-`~/InfiltratorOS-Kernel-Archive/` tree to it *without moving, deleting or
-overwriting existing files*, and check the copied
-`InfiltratorOS-Kernel-0.1.0/SHA256SUMS-Archive.txt` and
-`HistoricalHomeOutputs-0.1.0/SHA256SUMS.txt` (and its
-`UpstreamRemainder/SHA256SUMS.txt`) on the destination. A same-disk copy is
-not off-device protection. Never guess a device path or format/mount/modify a
-drive while choosing the backup target.
+This uses the already verified binary snapshot, extracts the existing
+compiled image/modules/headers/debug, packages them in new **separate**
+`/Temporary/InfiltratorOS/Kernel/Packages/NativeLayout/InfiltratorOS-0.1.0/`
+files at Debian revision `0.1.0-2`, validates that **each** actual Debian
+archive contains only `/System/Kernel/` installation paths, records the exact
+transitional ABI and generates an independent SHA-256 manifest.
 
-**After off-machine backup:** Work on isolated QEMU runtime module-loading and read/write root-filesystem qualification, then separately design/verify native package and Setup installation paths. Keep the proved 0.1.0 baseline immutable. Future development work should be on the same `main` branch and use new versioned artifacts and disposable `/Temporary/InfiltratorOS/` work areas.
+It neither rebuilds the kernel nor runs `dpkg -i`, `apt install`, host
+kernel replacement, EFI modification, reboot or removal of the historical
+`0.1.0-1` package archives. An existing completed native `0.1.0-2` output
+is never overwritten. Only after this produces a **real on-laptop PASS**
+may we claim corrected native 0.1.0 binary packages have been produced.
+
+**After repackaging:** perform a disposable VM test against the actual
+native package payload and qualify runtime module loading and a read/write
+root filesystem. The corrected path and package metadata alone do **not**
+make a fully installed, bootable InfiltratorOS distribution.
+
 
 ## Required preservation rules
 
@@ -90,4 +103,4 @@ drive while choosing the backup target.
 - Project-specific native user-facing paths use capitalised full names. Temporary staging belongs under `/Temporary/InfiltratorOS`; permanent kernel assets under `/System/Kernel`; independent shared filesystem engines under `/System/Filesystems`.
 - Never claim completed stages from CI checks alone. Real on-laptop success evidence is documented in [the complete build and qualification log](BUILD-STATUS.md).
 
-**For a future conversation:** Open this file and the full `docs/BUILD-STATUS.md` before editing anything. Resume at off-machine binary backup; then pursue isolated QEMU module/root qualification. All earlier build, virtual-boot and home-cleanup steps are already complete.
+**For a future conversation:** Open this file and the full `docs/BUILD-STATUS.md` before editing anything. Resume at **actual native 0.1.0-2 repackaging** using the above command; then qualify native package payloads, isolated QEMU module/root operation and Boot/Setup installation. Off-device backup is optional and not an installation prerequisite. All earlier build, virtual-boot and home-cleanup steps are already complete.
