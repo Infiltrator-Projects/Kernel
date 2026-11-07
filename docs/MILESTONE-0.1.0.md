@@ -60,66 +60,80 @@ independently retains the full source and validated development history.
 No USB drive, new OS installation or recompilation is required to correct
 the Debian package paths.
 
-## Source-bearing public `.run` installer — new GitHub publishing pipeline
+## Correct native kernel version and public downloader
 
-The **release source is now defined entirely in GitHub**: the
-`scripts/infiltrator/package-run.sh` generator embeds `git archive HEAD`
-and creates `InfiltratorOS-Kernel-0.1.0-amd64.run`. The
-`.github/workflows/release-run.yml` workflow tests the native installer,
-generates the source-bearing `.run`, verifies its embedded files and
-SHA-256, and publishes it to GitHub Releases as an **early development**
-release. This file must be produced on GitHub, not by running a private
-local script on Shannon's machine.
+**Current product:** InfiltratorOS Kernel **0.1.0**. The imported Ubuntu
+Linux source tree retains its upstream `Makefile` version **7.0.14**
+for Linux code compatibility, but **7.0.14 is not an InfiltratorOS
+release number**. The old first native builds incorrectly generated
+`7.0.14-infiltrator` as their kernel release and module ABI.
 
-**One-file user workflow**: obtain the `.run` from the Kernel GitHub
-Releases page, make it executable, and execute it. There is no
-`~/Kernel` source tree required, and no old local compiler objects
-are used. The self-extracting file contains the **entire committed
-kernel source** and its first-party tools.
+**Corrected first-party native GitHub builder (not yet fully compiled
+on the test machine):**
 
-The executable creates its own isolated paths under
-`/Temporary/InfiltratorOS/Kernel/`:
+- Explicit Kbuild `KERNELRELEASE=0.1.0-infiltrator`, rather than
+  appending `-infiltrator` to the upstream version. Both
+  `include/config/kernel.release` and
+  `include/generated/utsrelease.h` must contain this exact release.
+- All new native image, headers and debug Debian packages must carry
+  `X-InfiltratorOS-Module-ABI: 0.1.0-infiltrator`. The native
+  `mkdebian`, `builddeb`, staging and installation code reject
+  newly compiled products identifying themselves as 7.0.14.
+- Debian **`0.1.0-3`** differentiates this kernel-version correction
+  from the original `0.1.0-1` (wrong install paths) and
+  `0.1.0-2` (corrected directories but inherited upstream ABI).
+  These are Debian package revisions, **not InfiltratorOS versions**.
 
-- `Build/InfiltratorOS-Run.<unique>/Source` — unmodified embedded Git source
-- `Build/InfiltratorOS-Run.<unique>/obj` — completely new build objects
-- `Packages/InfiltratorOS-Run.<unique>/` — newly compiled image,
-  developer headers and debug Debian packages (version `0.1.0-2`)
-- `Staging/InfiltratorOS-Run.<unique>/` — SHA-verified native
-  image/module staging, not host installation
-- `Logs/InfiltratorOS-Run.<unique>.log` — complete compiler/install log
+The public `InfiltratorOS-Kernel-0.1.0-amd64.run` is intentionally a
+small **network downloader**. It contains the exact release commit ID and
+download/build/install logic, **not an embedded 161 MB kernel source
+archive**. GitHub only publishes this small file; the kernel is
+compiled and tested on the computer executing the `.run`.
 
-It compiles **fresh from source**, checks Debian package identities and
-payload paths to ensure nothing installs outside `/System/Kernel`, and
-runs `scripts/infiltrator/install-native.sh`. That installer extracts
-the validated image, modules, headers and debug to **/System/Kernel**
-without using host `dpkg -i`/APT, Linux kernel post-install hooks,
-`/boot`, `/lib/modules`, `/usr/src`, EFI or NVRAM. It refuses to
-overwrite an existing versioned kernel installation.
+The `.run` automatically provisions missing folders including
+`/Temporary/InfiltratorOS/Kernel` (requesting scoped sudo if
+`/Temporary` itself is absent) and downloads the committed source
+inside a new `Build/InfiltratorOS-Run.<unique>/Source` directory.
+It compiles into a new `obj` tree on that computer, verifies native
+packages and checksums, then installs the versioned files under
+`/System/Kernel` without touching the existing Linux `/boot`
+or EFI bootloader. Its `--build-only` mode skips native installation.
 
-`--build-only` makes the real compiler/test run without changing
-`/System/Kernel`; `--install-deps` optionally permits apt to install
-compiler dependencies. The default is fresh compilation **and**
-native file installation.
+**Evidence boundary:** The previous user laptop build showed live
+compilation and Debian `0.1.0-2` packaging but still printed
+`7.0.14-infiltrator`. A **fresh recompilation from the newly
+published corrected `.run`** is required to verify that the complete
+compiled kernel, signed modules, module ABI and resulting .debs use
+`0.1.0-infiltrator`. Source checks alone do not prove this happened.
+If `/System/Kernel` already has the previous versioned files, the
+installer refuses to overwrite them rather than silently replace an
+existing native installation.
 
-**Qualifying limitation:** The actual source-bearing `.run` has not
-yet been executed on Shannon's physical machine and cannot be claimed
-as a completed working installation. The GitHub synthetic tests qualify
-the package path and isolated file installation only. A native bootable
-OS, runtime module loader and root filesystem require further work.
-
-## Keep the golden milestone distinct
-
-The already successful 0.1.0 kernel compilation and virtual boot,
-original `0.1.0-1` Linux-path Debian packages and independently
-verified local archive remain historical evidence and are never
-reused by the fresh `.run`. Source-of-truth for future builds is
-the public `main` GitHub commit embedded in each published installer.
+The user does **not** need `~/Kernel` or individual Git clone/build
+commands. The authoritative implementation and release generator live
+on GitHub `main`. The former `0.1.0-1` build and successful QEMU
+handoff are historical evidence only, not the current release's
+compiled ABI.
 
 ## Required preservation rules
 
-- No `make clean`, `git clean`, source tree deletion, silent in-place rebuild, installer execution, bulk rename, existing archive overwrite, reboot, host kernel installation or EFI/NVRAM modifications.
-- Linux internal `7.0.14-infiltrator` `vermagic` and package references must not be renamed to `0.1.0` without real module-ABI work; present `0.1.0` as the *product* version.
-- Project-specific native user-facing paths use capitalised full names. Temporary staging belongs under `/Temporary/InfiltratorOS`; permanent kernel assets under `/System/Kernel`; independent shared filesystem engines under `/System/Filesystems`.
-- Never claim completed stages from CI checks alone. Real on-laptop success evidence is documented in [the complete build and qualification log](BUILD-STATUS.md).
+- The imported Linux 7.0.14 source provenance, licensing and internal
+  Linux API version must remain accurate. **Do not label 7.0.14 as an
+  InfiltratorOS kernel version**; the native UTS release and compiled
+  module ABI are **0.1.0-infiltrator**.
+- Temporary checkout/build files remain under
+  `/Temporary/InfiltratorOS/Kernel`, not `~/Kernel`; installed files
+  remain exclusively under `/System/Kernel`.
+- Do not modify the host's running Mint kernel, `/boot`, EFI or NVRAM
+  as a side effect of the local compile or native file installation.
+- Do not claim complete verification without a **real laptop build**
+  showing a successful complete compilation, native packaging and
+  installation. Prior `0.1.0-1` and `0.1.0-2` evidence is
+  historical, not proof of new `0.1.0-3` binaries.
 
-**For a future conversation:** Open this file and the full `docs/BUILD-STATUS.md` before editing anything. Resume by obtaining the source-bearing `.run` published through the public GitHub Release workflow, compiling fresh under /Temporary, inspecting and installing native package payloads to /System/Kernel; then qualify QEMU module/root operation and Boot/Setup. Never substitute a private ~/Kernel checkout or local repackaging for the public release. Off-device backup is optional and not an installation prerequisite. All earlier build, virtual-boot and home-cleanup steps are already complete.
+**For future development:** Work directly against GitHub `main`.
+The public small `.run` downloads that commit and performs the
+actual compiler test on the user's machine. No permanent local
+patches, manual `~/Kernel` checkouts or GitHub kernel compilation
+substitutes.
+
