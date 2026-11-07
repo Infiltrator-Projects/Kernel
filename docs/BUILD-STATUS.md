@@ -27,7 +27,11 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 6. The first fix modified only `.native-build/obj/.config`, removing unavailable Canonical trusted and revoked certificate paths. However the second build still tried to load the old certificate path. The most likely reason is that generated `include/config/auto.conf` had retained old values, or that package-build recursion used them. This diagnosis must be proven by the next verification step.
 7. The first stricter preflight test on the Mint laptop reported `Kernel: ERROR: missing generated auto.conf; regenerate config before compiling`. This was a **build-script ordering error**: the script invoked `syncconfig` directly before requiring an output which had not been generated. The user did **not** reach another full compilation or installation.
 8. The builder now uses the real Kbuild `prepare` target, which materialises generated configuration and headers, **then** compares `.config` against `include/config/auto.conf` and checks for missing vendor certificate files before proceeding. A new GitHub Actions job compiled actual configuration/preparation tools in an isolated out-of-tree build and passed on 2026-11-07. This validates the preparation sequence on the CI host, not yet a complete Linux Mint compilation or boot.
-9. All previous compiler outputs are expected to remain in the local untracked `.native-build/obj/` tree; there is no instruction to clean or remove them. GitHub contains the source and the fixes, **not** the already-built object files from the user's laptop.
+9. On the next actual Mint run, `make configure-only SKIP_DEPS=1` **still failed** with `Kernel: ERROR: missing generated auto.conf` even though Kbuild's `prepare` target itself did work. Source inspection established the cause: the top-level `make configure-only` / `make build-only` exports Kbuild's internal `sub_make_done=1`; the nested kernel makes inherited it and therefore skipped the outer pass that honours `O=`. Build work had actually been occurring **in the source directory** rather than the expected `.native-build/obj`. This also explains the earlier missing Canonical PEM file at compilation.
+10. Added `scripts/infiltrator/run-kbuild.sh` to reset `sub_make_done` on every independent kernel make. The regression test reproduces `sub_make_done=1` and performs real `olddefconfig`/`prepare` operations in a temporary `O=` directory. **This test passed on GitHub Actions**. The corrected wrapper has not yet been run on the Mint laptop.
+11. Rather than deleting hours of previously compiled objects, the builder now detects a legacy in-source build by the presence of its `.config` and `include/config/auto.conf`. It reuses that build in place until the first baseline is qualified. On a clean checkout it uses the intended out-of-tree `.native-build/obj`. After a successful build, `.native-build/last-completed-objtree` records the actual object directory for native artifact staging. The compiled objects are local, **not** stored in GitHub. Do not run `mrproper`, `clean`, or `git clean` to try to correct the build.
+
+**Current state:** Native Mint source was imported and configured but a complete build is still outstanding. The updated wrapper and legacy-object reuse require verification on the actual Mint host.
 
 ## Next immediate action
 
@@ -37,7 +41,7 @@ First confirm the updated prepare step works on the original Mint host **without
 cd ~/Kernel && git pull --ff-only && make configure-only SKIP_DEPS=1
 ```
 
-Success requires a line similar to `Kernel: Effective compilation certificate settings verified (no missing distro PEMs).` followed by `Kernel: Configured at ...`.
+Success requires `Kernel: Effective compilation certificate settings verified (no missing distro PEMs).` followed by `Kernel: Configured at ...`. On this laptop the configured object tree may be **`~/Kernel/.config`**, because the earlier bug caused a real in-source build; the builder should explicitly report that it is reusing those existing compiled objects.
 
 **Only after that succeeds**, continue the incremental compilation with a full diagnostic log:
 
