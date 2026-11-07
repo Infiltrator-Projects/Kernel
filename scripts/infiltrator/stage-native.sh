@@ -8,6 +8,17 @@ log() { printf 'Kernel stage: %s\n' "$*" >&2; }
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 packages="$root/dist"
 objects="$root/.native-build/obj"
+# Older builds compiled in-source because their parent `make` exported
+# sub_make_done. The build writes its successfully completed objtree here,
+# allowing native staging to use the actual image/config/System.map without
+# discarding the saved compiler outputs or assuming a newer out-of-tree build.
+if [[ -f "$root/.native-build/last-completed-objtree" ]]; then
+  IFS= read -r saved_objects < "$root/.native-build/last-completed-objtree" || :
+  case "$saved_objects" in
+    "$root"|"$root/.native-build/obj") objects="$saved_objects" ;;
+    *) echo "Kernel stage: ERROR: unexpected saved object directory: $saved_objects" >&2; exit 1 ;;
+  esac
+fi
 output="$root/dist/native"
 while (( $# )); do
   case "$1" in
