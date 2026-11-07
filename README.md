@@ -10,14 +10,21 @@ Initial source: Ubuntu linux-hwe-7.0 7.0.0-42.42~24.04.1, including the
 distribution's source patch set. See [baseline provenance](docs/upstream/BASELINE.md).
 The original Linux kernel COPYING and LICENSES/ notices remain applicable.
 
-**Current status:** The Linux-derived kernel baseline has **successfully
-compiled and produced three Debian kernel packages on Linux Mint 22.3**, and
-its compiled image/modules were successfully staged under the InfiltratorOS
-`/System/Kernel` native artifact hierarchy on 2026-11-07. The original build
-artifacts are preserved on the test machine. It has **not** been installed,
-boot-tested or independently reimplemented. InfiltratorOS is intended to
-evolve into a distinct operating system and kernel with Linux compatibility,
-rather than permanently remaining a renamed Linux distribution.
+**Current status (2026-11-07):** The Linux-derived kernel baseline has
+**successfully compiled and produced three InfiltratorOS Kernel 0.1.0 Debian
+packages on Linux Mint 22.3**. Their locally built kernel image and modules
+were staged at
+`/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/System/Kernel/`
+and passed a read-only SHA-256 verification. **The exact staged kernel
+successfully booted in QEMU/OVMF**, using Boot `0.1.39` and the canonical
+`FAT16.so`, and reached a guest test-initramfs marker. The complete
+evidence and commands are in [docs/BUILD-STATUS.md](docs/BUILD-STATUS.md).
+The image has **not** been installed or booted as the laptop's host kernel,
+and full root-filesystem/module loading, Secure Boot, hardware qualification
+and independence from the transitional Linux ABI are **not** established.
+InfiltratorOS is intended to evolve into a distinct operating system and
+kernel with Linux compatibility, rather than permanently remaining a
+renamed Linux distribution.
 
 Boot is maintained in Infiltrator-Projects/Boot. Format-specific filesystem
 engines remain owned by their independent Filesystem-* repositories.
@@ -48,7 +55,7 @@ remain available.
 - `make stage-native` stages the uninstalled kernel image and modules under `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-<VERSION>/System/Kernel/`. The earlier `~/Kernel/dist/native/` compilation baseline is preserved unchanged.
 - `make package-run` produces a source-bearing local native `.run` builder in `/Temporary/InfiltratorOS/Kernel/Packages/` (not published automatically).
 
-## First isolated UEFI handoff test
+## Isolated UEFI handoff test — first successful run
 
 The Mint Latitude 5550 has a checksum-verified native staged kernel
 `0.1.0` image and confirmed `CONFIG_EFI=y`, `CONFIG_EFI_STUB=y`,
@@ -56,7 +63,9 @@ The Mint Latitude 5550 has a checksum-verified native staged kernel
 while the published Boot `0.1.39` is independently testable without
 installing anything.
 
-After `git pull --ff-only`, run the explicit, non-privileged test:
+The following non-privileged test **already passed** on the Latitude 5550;
+it can be repeated if further qualification or regression testing is
+required:
 
 ```bash
 bash scripts/infiltrator/test-ovmf-handoff.sh
