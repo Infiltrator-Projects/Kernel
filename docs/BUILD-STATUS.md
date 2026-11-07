@@ -94,34 +94,40 @@ Last updated: 2026-11-07 (Australia/Melbourne). This file is a **persistent fact
 
 **Important limitation:** The current staging script should be described as a **Linux-compatible transitional artifact extractor**. It is **not** sufficient to declare the native InfiltratorOS module layout and filesystem-provider integration complete. Do not instruct the user to install/activate/boot from it.
 
-## Next immediate action — build native-named binaries, preserve baseline
+21. **SECOND SUCCESSFUL FULL NATIVE KERNEL PACKAGE BUILD, 2026-11-07, observed on Shannon's Linux Mint Latitude 5550.** The user showed a complete terminal result from the second `make build-only SKIP_DEPS=1 JOBS=10`: `dpkg-deb` built `infiltratoros-kernel-image-0.1.0_0.1.0-1_amd64.deb` and `infiltratoros-kernel-image-0.1.0-dbg_0.1.0-1_amd64.deb`, completed `dpkg-genbuildinfo`, `dpkg-genchanges` and `dpkg-source --after-build`, then printed `Kernel: Created 3 InfiltratorOS Kernel 0.1.0 .deb package(s) in dist/. No kernel was installed.` and returned to `ssmith@ssmith-Latitude-5550:~/Kernel$`. This is **actual native kernel package-build success**, not merely a synthetic test. The third package is counted by the builder (normally headers), but its precise filename has not yet been independently read. Packages exist on the laptop under `~/Kernel/dist/`; the complete second build log is `~/Kernel-build-native-0.1.0.log`. The first successful Linux-named baseline and previously staged `~/Kernel/dist/native/` are also still on the laptop. No installation or boot test has occurred.
 
-The local `make check` and equivalent CI tests have **passed**. There is no
-reason to repeat the short tests immediately.
+22. **Native directory/identity mismatch and source fix, 2026-11-07.** The user's established InfiltratorOS filesystem contract uses **capitalised full names**, with **uninstalled working data in `/Temporary/InfiltratorOS/`** and permanent activated kernel assets under **`/System/Kernel/`**. Earlier wrapper output `~/Kernel/dist/`, `.native-build/` and `dist/native-0.1.0/` did not follow that convention. The corrected source routes *new* build objects to `/Temporary/InfiltratorOS/Kernel/Build/`, uninstalled packages to `/Temporary/InfiltratorOS/Kernel/Packages/`, staged `System/Kernel` artifacts to `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/`, and the self-extracting runner's logs to `/Temporary/InfiltratorOS/Kernel/Logs/`. The staging tree now uses `Modules/InfiltratorOS-0.1.0/` as a **presentation/storage directory**, while the **actual compiled module ABI and vermagic still equal `7.0.14-infiltrator`**. That inherited number comes from `Makefile` fields `VERSION=7 PATCHLEVEL=0 SUBLEVEL=14`, plus `LOCALVERSION=-infiltrator`. Changing the real module ABI needs a deliberate rebuild plus loader/Boot compatibility checks, not just renamed folders. The full source tree is still Linux-derived and this is not yet an independent, qualified runtime. **Crucially the current second build ran the old scripts and already finished successfully:** updating GitHub source does not retroactively relocate its binary outputs. Do **not** remove, rename, clean or overwrite any existing `~/Kernel/dist/`, `~/Kernel/.native-build/`, in-source compiled object files or logs. The new staging supports reading those earlier packages with `--packages "$PWD/dist"` without recompiling. GitHub preserves source and documentation, **not local binaries**. Latest GitHub layout regression check before recording this status (run `42359275973`) passed; a future actual Mint test of new staging paths is still pending.
 
-Next, if ready to qualify the actual native Debian package production, run
-the incremental build on the same Mint host, logging separately:
+**Confirmed state:** Two complete full native kernel package builds have succeeded on the Latitude 5550; first `linux-image`-named baseline was staged successfully, and the second generated **three genuine InfiltratorOS Kernel 0.1.0 packages** in `~/Kernel/dist/`. Native uninstalled Temporary layout source fixes and tests are committed, but the newly branded image has not yet been verified in its new staged `/Temporary/InfiltratorOS/Kernel/Staging/...` output. No actual host kernel installation or boot qualification has occurred.
+
+## Next immediate action — verify and stage without rebuilding
+
+On the Mint laptop, preserve the full kernel build output and update the source
+to include the native directory-layout corrections:
 
 ```bash
-cd ~/Kernel && set -o pipefail && make build-only SKIP_DEPS=1 JOBS=10 2>&1 | tee "$HOME/Kernel-build-native-0.1.0.log"
+cd ~/Kernel && git pull --ff-only && make check
 ```
 
-This enables the InfiltratorOS-native package generator already present in
-the current `main` checkout; the resulting image/header/debug .deb files
-should identify as InfiltratorOS Kernel `0.1.0` and carry exact transitional
-module ABI `7.0.14-infiltrator`. Compilation objects may be reused, but
-the packaging work can take substantial time. No kernel installation or
-reboot is requested. **Success must be confirmed from the terminal's
-completion and actual built package metadata, not inferred from CI.**
+That is a **short contract test**, not another full kernel compile. When it
+passes, stage the **already built** InfiltratorOS 0.1.0 packages explicitly:
 
-Only after successful completion should the versioned staging target
-`dist/native-0.1.0` be created, without replacing `dist/native`.
+```bash
+cd ~/Kernel && bash scripts/infiltrator/stage-native.sh --packages "$PWD/dist"
+```
 
-Original successful artifacts remain:
-`~/Kernel/dist/`, `~/Kernel/dist/native/`, source-tree compiler objects,
-`~/Kernel/.native-build/` and `~/Kernel-build-next.log`. Do not clean,
-delete, install or reboot to resolve identity. GitHub persists the source and
-this handoff, but **not** the original local compiled binary artifacts.
+Expected **uninstalled** output:
+`/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-0.1.0/System/Kernel/`.
+The script should refuse to overwrite an existing stage without an explicit
+request. It neither installs nor activates `/System/Kernel` and must not touch
+the host's bootloader. If `/Temporary/InfiltratorOS` is not writable, report
+the permission error; **do not delete existing files or redirect to dist**.
+
+**Preserve** `~/Kernel/dist/`, `~/Kernel/dist/native/`,
+`~/Kernel/.native-build/`, all compiled in-source objects,
+`~/Kernel-build-next.log`, and `~/Kernel-build-native-0.1.0.log`.
+Do not run `make clean`, `mrproper`, `git clean`, `git reset --hard`,
+delete any output, install a kernel package, or reboot as part of these checks.
 
 ## Longer-term goals (not yet completed)
 
