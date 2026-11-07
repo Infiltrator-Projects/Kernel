@@ -58,14 +58,25 @@ else
 fi
 work="$root/.native-build"; out="$root/dist"
 mkdir -p "$work" "$out"
+# A Mint baseline kept in Git must not block Debian machines whose running
+# kernel has another base version. Prefer matching source, then fetch exact.
+matches_running() {
+  local dir=$1 v p s base
+  [[ -f "$dir/Makefile" && -d "$dir/scripts/kconfig" ]] || return 1
+  v=$(awk '$1=="VERSION" {print $3;exit}' "$dir/Makefile")
+  p=$(awk '$1=="PATCHLEVEL" {print $3;exit}' "$dir/Makefile")
+  s=$(awk '$1=="SUBLEVEL" {print $3;exit}' "$dir/Makefile")
+  base="$v.$p.$s"
+  case "$running" in "$base"|"$base"-*|"$base"+*) return 0 ;; *) return 1 ;; esac
+}
 if [[ -n "$source_dir" ]]; then
   source_dir=$(cd "$source_dir" && pwd -P) || fail "Invalid --source-dir"
-elif [[ -f "$root/src/linux/Makefile" ]]; then
+elif matches_running "$root/src/linux"; then
   source_dir="$root/src/linux"
 else
   count=0
   for dir in "$root"/upstream/*/; do
-    if [[ -f "$dir/Makefile" && -d "$dir/scripts/kconfig" ]]; then
+    if matches_running "$dir"; then
       source_dir=$dir; count=$((count+1))
     fi
   done
