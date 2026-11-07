@@ -48,4 +48,33 @@ remain available.
 - `make stage-native` stages the uninstalled kernel image and modules under `/Temporary/InfiltratorOS/Kernel/Staging/InfiltratorOS-<VERSION>/System/Kernel/`. The earlier `~/Kernel/dist/native/` compilation baseline is preserved unchanged.
 - `make package-run` produces a source-bearing local native `.run` builder in `/Temporary/InfiltratorOS/Kernel/Packages/` (not published automatically).
 
+## First isolated UEFI handoff test
+
+The Mint Latitude 5550 has a checksum-verified native staged kernel
+`0.1.0` image and confirmed `CONFIG_EFI=y`, `CONFIG_EFI_STUB=y`,
+`CONFIG_BLK_DEV_INITRD=y`. Its installed Boot package is `0.1.38`,
+while the published Boot `0.1.39` is independently testable without
+installing anything.
+
+After `git pull --ff-only`, run the explicit, non-privileged test:
+
+```bash
+bash scripts/infiltrator/test-ovmf-handoff.sh
+```
+
+This verifies the existing staged image checksums, downloads and verifies
+the **published Boot 0.1.39 .deb**, extracts its EFI executable into
+`/Temporary/InfiltratorOS/Kernel/Tests/`, and runs Boot's **matching,
+release-tagged** `tests/test_so_boot.py` with the machine's
+`/System/Filesystems/FAT16.so`, a disposable FAT16 disk, synthetic
+initramfs and OVMF/QEMU. A successful VM test must emit
+`BOOT-FAT16-SO-LINUX-HANDOFF-PASS`, which means the guest reached a test
+initramfs; this does **not** establish a fully installed or bootable
+InfiltratorOS system. All test evidence and failures are retained under a
+unique named directory in `/Temporary/InfiltratorOS/Kernel/Tests/`.
+
+The wrapper **does not** run `apt install`, modify the ESP, NVRAM, live
+`/System/Kernel`, `/boot`, or the running kernel. It leaves the user's
+successfully compiled `~/Kernel/dist/` artifacts untouched.
+
 [Native InfiltratorOS Kernel source and installed-file contract](docs/NATIVE-LAYOUT.md) specifies the `/System/Kernel/{Images,Modules,Filesystems,Firmware}` layout. Staging and `.run` compilation do **not** install or boot a kernel; Boot/Setup integration is still outstanding.
