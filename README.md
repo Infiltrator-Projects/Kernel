@@ -1,5 +1,7 @@
 # InfiltratorOS Kernel
 
+**START HERE — verified 0.1.0 milestone, preserved files and next action:** [docs/MILESTONE-0.1.0.md](docs/MILESTONE-0.1.0.md).
+
 **Development handoff / current build status:** [docs/BUILD-STATUS.md](docs/BUILD-STATUS.md). It records the original source identity, local Mint test baseline, unresolved build blockers, and exact recovery commands. This is not a qualified bootable release.
 
 This repository contains the **complete Ubuntu Linux HWE 7.0 kernel source**
