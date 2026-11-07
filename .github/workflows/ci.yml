@@ -67,3 +67,19 @@ jobs:
           test -s "$obj/include/config/auto.conf"
           test -s "$obj/include/generated/autoconf.h"
           echo "PASS: nested Kbuild build wrapper preserves O= object directory"
+
+      - name: Exercise in-tree Kbuild with inactive module signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is the legacy compilation layout on the original Mint
+          # laptop. Inactive Kconfig symbols can have .config defaults
+          # that are deliberately absent from include/config/auto.conf.
+          env -u sub_make_done make x86_64_defconfig
+          scripts/config --file .config --disable MODULE_SIG --disable IMA_APPRAISE_MODSIG
+          scripts/config --file .config --set-str MODULE_SIG_KEY certs/signing_key.pem
+          env -u sub_make_done make LOCALVERSION=-infiltrator olddefconfig
+          env -u sub_make_done make LOCALVERSION=-infiltrator prepare
+          bash scripts/infiltrator/verify-certificate-config.sh "$PWD" "$PWD" "$PWD/.config"
+          test -s include/config/auto.conf
+          echo "PASS: in-tree prepared config accepts inactive module signing key defaults"
