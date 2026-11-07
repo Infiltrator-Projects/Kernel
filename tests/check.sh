@@ -40,3 +40,6 @@ echo "PASS: certificate input handling preserves available keys and reports miss
 
 # Native kernel staging must honour the InfiltratorOS /System/Kernel contract.
 bash tests/native-contract.sh
+
+# Certificate path changes must propagate to generated Kbuild auto.conf.
+bash tests/effective-certificates.sh
