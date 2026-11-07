@@ -117,6 +117,14 @@ cp "$config" "$obj/.config"
 bash "$root/scripts/infiltrator/prepare-certificates.sh" "$source_dir" "$obj"
 log "Configuring with the running distro defaults"
 make -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator olddefconfig
+# bindeb-pkg invokes a second kernel make via debian/rules. It consumes
+# include/config/auto.conf, not just the edited .config. In incremental
+# builds a stale auto.conf can retain the absent Canonical PEM paths, so
+# explicitly synchronize and verify the *effective* build configuration
+# before touching any more driver objects.
+log "Synchronizing Kbuild's generated configuration"
+make -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator syncconfig
+bash "$root/scripts/infiltrator/verify-certificate-config.sh" "$source_dir" "$obj" "$obj/.config"
 release=$(make -s --no-print-directory -C "$source_dir" O="$obj" LOCALVERSION=-infiltrator kernelrelease)
 [[ "$release" == *infiltrator* && "$release" != "$running" ]] || fail "Kernel release suffix is not distinct: $release"
 log "Generated kernel release: $release"
