@@ -10,6 +10,8 @@ bash -n scripts/infiltrator/test-ovmf-handoff.sh
 bash tests/preserve-milestone.sh
 # Real synthetic Debian repack from historical Linux-path binaries to native paths.
 bash tests/repackage-native.sh
+# Test actual Kbuild path generator with synthetic image/header/debug inputs.
+bash tests/native-builddeb-paths.sh
 bash tests/home-artifacts.sh
 grep -Fq 'boot_version=0.1.39' scripts/infiltrator/test-ovmf-handoff.sh
 grep -Fq 'mktemp -d "$workspace/Tests/' scripts/infiltrator/test-ovmf-handoff.sh
