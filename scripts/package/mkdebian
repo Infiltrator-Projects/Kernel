@@ -194,7 +194,10 @@ if [ "${INFILTRATOROS_NATIVE_PACKAGE:-0}" = 1 ]; then
     exit 1
   }
   sourcename=infiltratoros-kernel
-  packageversion=${product_version}-1
+  # Revision -1 was proven to install in inherited Linux directories.
+  # Native /System/Kernel install-only payload starts with -2; never mistake
+  # the archived -1 package for an InfiltratorOS native installer.
+  packageversion=${product_version}-2
   packagename=infiltratoros-kernel-image
   release_suffix=$product_version
   header_package=infiltratoros-kernel-headers-${product_version}
