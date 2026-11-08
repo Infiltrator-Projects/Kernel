@@ -1,0 +1,121 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Compile an independent EXT2.ko against the ACTUAL InfiltratorOS Kernel
+# release and boot it twice on disposable EXT2 image files in QEMU.
+name: Qualify independent EXT2 against InfiltratorOS Kernel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ext2-native-qualification.yml'
+      - 'tests/test-ext2-module-qemu.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ext2-native:
+    name: External EXT2 module and two-boot read-write qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    env:
+      EXT2_COMMIT: c0ad7280fb726bd39ba2b66ad9d04e89ccdc6abc
+      NATIVE_RELEASE: 0.1.0-infiltrator
+    steps:
+      - name: Checkout Kernel main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
+
+      - name: Install isolated compile and VM test dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libelf-dev libssl-dev dwarves \
+            kmod busybox-static qemu-system-x86 qemu-utils \
+            e2fsprogs cpio gzip file python3 git
+          bash -n tests/test-ext2-module-qemu.sh
+          test "$(cat VERSION)" = 0.1.0
+
+      - name: Fetch pinned independent EXT2 owner source
+        run: |
+          set -euo pipefail
+          provider="$RUNNER_TEMP/Filesystem-EXT2"
+          git init -q -b main "$provider"
+          git -C "$provider" remote add origin https://github.com/Infiltrator-Projects/Filesystem-EXT2.git
+          git -C "$provider" fetch --depth 1 origin "$EXT2_COMMIT"
+          git -C "$provider" checkout --detach -q FETCH_HEAD
+          test "$(git -C "$provider" rev-parse HEAD)" = "$EXT2_COMMIT"
+          test -s "$provider/native/filesystems/ext2/linux/Makefile"
+          echo "EXT2_PROVIDER=$provider" >> "$GITHUB_ENV"
+
+      - name: Configure and build actual 0.1.0-infiltrator ABI and modules
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          obj="$RUNNER_TEMP/KernelObjects"
+          mkdir -p "$obj"
+          make O="$obj" x86_64_defconfig
+          # Only this disposable VM build disables the old EXT2 driver.
+          # The normal Kernel packaging configuration is NOT modified here.
+          scripts/config --file "$obj/.config" \
+            -e EFI -e EFI_STUB -e PCI -e VIRTIO -e VIRTIO_PCI -e VIRTIO_BLK \
+            -e MODULES -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
+            -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE -e RD_GZIP \
+            -d EXT2_FS -d EXT4_USE_FOR_EXT2 \
+            -d MODULE_SIG -d DEBUG_INFO \
+            --set-str SYSTEM_TRUSTED_KEYS '' \
+            --set-str SYSTEM_REVOCATION_KEYS ''
+          make O="$obj" KERNELRELEASE="$NATIVE_RELEASE" olddefconfig
+          grep -Fqx '# CONFIG_EXT2_FS is not set' "$obj/.config"
+          grep -Fqx '# CONFIG_EXT4_USE_FOR_EXT2 is not set' "$obj/.config" || \
+            ! grep -Fqx 'CONFIG_EXT4_USE_FOR_EXT2=y' "$obj/.config"
+          make O="$obj" KERNELRELEASE="$NATIVE_RELEASE" \
+            -j 4 bzImage modules > "$RUNNER_TEMP/native-kernel-build.log" 2>&1 || {
+            tail -n 140 "$RUNNER_TEMP/native-kernel-build.log"
+            exit 1
+          }
+          test -s "$obj/Module.symvers"
+          test -s "$obj/arch/x86/boot/bzImage"
+          test "$(cat "$obj/include/config/kernel.release")" = "$NATIVE_RELEASE"
+          echo "KERNEL_OBJECTS=$obj" >> "$GITHUB_ENV"
+          echo 'NATIVE_KERNEL_MODULE_BUILD_PASS'
+
+      - name: Compile repository-owned ext2.ko against native kernel ABI
+        run: |
+          set -euo pipefail
+          provider_module="$EXT2_PROVIDER/native/filesystems/ext2/linux"
+          make O="$KERNEL_OBJECTS" KERNELRELEASE="$NATIVE_RELEASE" \
+            M="$provider_module" -j 4 modules \
+            > "$RUNNER_TEMP/ext2-external-module-build.log" 2>&1 || {
+            tail -n 160 "$RUNNER_TEMP/ext2-external-module-build.log"
+            exit 1
+          }
+          ext2="$provider_module/ext2.ko"
+          test -s "$ext2"
+          modinfo "$ext2" > "$RUNNER_TEMP/ext2.modinfo"
+          test "$(modinfo -F vermagic "$ext2" | awk '{print $1}')" = "$NATIVE_RELEASE"
+          echo "EXT2_MODULE=$ext2" >> "$GITHUB_ENV"
+          echo 'INDEPENDENT_EXT2_NATIVE_ABI_COMPILE_PASS'
+
+      - name: Prove external ext2.ko on two independent QEMU boots
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          bash tests/test-ext2-module-qemu.sh \
+            "$KERNEL_OBJECTS/arch/x86/boot/bzImage" \
+            "$EXT2_MODULE" "$RUNNER_TEMP/EXT2-Qualification" "$NATIVE_RELEASE"
+
+      - name: Preserve all compiled-module and guest integrity evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Native-EXT2-Qualification-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/native-kernel-build.log
+            ${{ runner.temp }}/ext2-external-module-build.log
+            ${{ runner.temp }}/ext2.modinfo
+            ${{ runner.temp }}/EXT2-Qualification/*.log
+            ${{ runner.temp }}/EXT2-Qualification/*.serial.log
+          if-no-files-found: warn
+          retention-days: 30
