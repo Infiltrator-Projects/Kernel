@@ -14,6 +14,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ext2-native-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ext2-native:
     name: External EXT2 module and two-boot read-write qualification
