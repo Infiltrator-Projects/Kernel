@@ -60,11 +60,11 @@ done
 [[ -d "$packages" && -d "$objects" ]] || fail 'Build outputs are missing; the full kernel compilation must succeed first'
 [[ -s "$objects/include/config/kernel.release" ]] || fail 'The configured kernel release file is missing'
 release=$(cat "$objects/include/config/kernel.release")
-[[ "$release" =~ ^[a-zA-Z0-9._+-]+$ && "$release" == *infiltrator* ]] || fail "Unrecognised kernel release: $release"
-# Historical 0.1.0-1/-2 artifacts had the imported Linux 7.0.14
+[[ "$release" =~ ^[a-zA-Z0-9._+-]+$ ]] || fail "Unrecognised kernel release: $release"
+# Historical 0.1.1-1/-2 artifacts had the imported Linux 7.0.14
 # release string. A new independently compiled native -3 package
 # must instead use the actual InfiltratorOS kernel release.
-expected_native_release="$component_version-infiltrator"
+expected_native_release="$component_version"
 [[ -f "$objects/.config" ]] || fail 'Kernel build configuration is missing'
 packages=$(cd "$packages" && pwd -P)
 objects=$(cd "$objects" && pwd -P)
@@ -84,12 +84,12 @@ legacy_images=()
 for deb in "$packages"/*.deb; do
   package=$(dpkg-deb -f "$deb" Package) || fail "Cannot inspect $deb"
   if [[ "$package" == "infiltratoros-kernel-image-$component_version" ]]; then
-    # Existing 0.1.0 packages were built with X-... source fields;
+    # Existing 0.1.1 packages were built with X-... source fields;
     # dpkg-gencontrol silently omits those fields from the binary control.
     # Do not reject an otherwise valid, previously compiled package solely
     # because the optional metadata was not copied across.
     package_version=$(dpkg-deb -f "$deb" Version) || fail "Cannot inspect native package version: $deb"
-    if [[ "$package_version" == "$component_version-3" && "$release" != "$expected_native_release" ]]; then
+    if [[ "$package_version" == "$component_version-4" && "$release" != "$expected_native_release" ]]; then
       fail "New native package cannot stage an inherited Linux release '$release'; expected $expected_native_release"
     fi
     abi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI) || fail "Cannot inspect package ABI: $deb"

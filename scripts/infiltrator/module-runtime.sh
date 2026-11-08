@@ -10,7 +10,7 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 [[ -r "$script_dir/VERSION" ]] || fail 'Missing installed runtime VERSION'
 version=$(tr -d '\r\n' < "$script_dir/VERSION")
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Invalid product version: $version"
-release="$version-infiltrator"
+release="$version"
 kernel_root=$(cd "$script_dir/../.." && pwd -P)
 module_root="$kernel_root/Modules/InfiltratorOS-$version"
 provider_root="$kernel_root/Filesystems"

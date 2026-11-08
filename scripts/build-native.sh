@@ -172,12 +172,12 @@ fi
 mkdir -p "$obj"
 # The imported Linux source Makefile remains 7.0.14, including its
 # LINUX_VERSION_CODE and internal compatibility expectations. The independent
-# InfiltratorOS release, UTS_RELEASE and module vermagic are 0.1.0-infiltrator.
+# InfiltratorOS release, UTS_RELEASE and module vermagic are 0.1.1.
 # Do not pretend this project already has seven major versions.
 product_version=$(tr -d '\r\n' < "$root/VERSION")
 [[ "$product_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail "Invalid InfiltratorOS Kernel product VERSION: $product_version"
-release_id="$product_version-infiltrator"
+release_id="$product_version"
 if [[ "$obj" == "$source_dir" ]]; then
   kbuild_args=(-C "$source_dir" KERNELRELEASE="$release_id")
 else

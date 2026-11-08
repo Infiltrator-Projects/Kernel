@@ -282,7 +282,7 @@ def main() -> None:
     product_version = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}", product_version):
         raise ValueError("Invalid InfiltratorOS Kernel product VERSION")
-    release = f"{product_version}-infiltrator"
+    release = product_version
     if cmd_out("modinfo", "-F", "vermagic", args.module).split()[0] != release:
         raise ValueError("InfiltratorFS .ko was not compiled against the InfiltratorOS kernel")
     work = args.output.resolve()

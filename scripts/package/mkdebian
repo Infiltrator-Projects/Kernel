@@ -195,17 +195,17 @@ if [ "${INFILTRATOROS_NATIVE_PACKAGE:-0}" = 1 ]; then
   fi
   # Require the compiled kernel release and module ABI to match the product.
   # The upstream Linux 7.0.14 version must not leak into native packages.
-  if [ "$KERNELRELEASE" != "${product_version}-infiltrator" ]; then
-    echo >&2 "Native InfiltratorOS package ABI mismatch: $KERNELRELEASE (expected ${product_version}-infiltrator)"
+  if [ "$KERNELRELEASE" != "$product_version" ]; then
+    echo >&2 "Native InfiltratorOS package ABI mismatch: $KERNELRELEASE (expected ${product_version})"
     exit 1
   fi
   sourcename=infiltratoros-kernel
   # Revision -1 was proven to install in inherited Linux directories.
   # Native -2 corrected the on-disk layout but still carried the imported
   # Linux 7.0.14-infiltrator ABI. Revision -3 is the first independently
-  # versioned InfiltratorOS 0.1.0-infiltrator binary build.
+  # versioned InfiltratorOS 0.1.1 binary build.
   # Revision -4 adds the compiled native module loader, firmware path and
-  # automatic backed-up repair of older 0.1.0 installations.
+  # automatic backed-up repair of older 0.1.1 installations.
   packageversion=${product_version}-4
   packagename=infiltratoros-kernel-image
   release_suffix=$product_version

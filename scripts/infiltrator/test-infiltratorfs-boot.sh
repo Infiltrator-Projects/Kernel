@@ -7,7 +7,7 @@ fail() { printf 'InfiltratorOS three-way trial: ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf 'InfiltratorOS three-way trial: %s\n' "$*" >&2; }
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 version=$(tr -d '\r\n' < "$root/VERSION")
-[[ "$version" == 0.1.0 ]] || fail 'Only InfiltratorOS Kernel 0.1.0 is qualified'
+[[ "$version" == 0.1.1 ]] || fail 'Only InfiltratorOS Kernel 0.1.1 is qualified'
 source= objects= stage= workspace= jobs=2 install_deps=0
 while (( $# )); do
   case "$1" in
@@ -32,7 +32,7 @@ done
 [[ "$stage" == /* && -d "$stage/System/Kernel" ]] || fail 'Absolute verified native Kernel stage required'
 [[ "$workspace" == /* && "$workspace" != / && -d "$workspace" && -w "$workspace" ]] || fail 'Writable absolute trial workspace required'
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid parallel jobs'
-[[ $(cat "$objects/include/config/kernel.release") == "$version-infiltrator" ]] || fail 'Wrong compiled InfiltratorOS ABI'
+[[ $(cat "$objects/include/config/kernel.release") == "$version" ]] || fail 'Wrong compiled InfiltratorOS ABI'
 kernel="$stage/System/Kernel/Images/InfiltratorOS-$version.img"
 config="$stage/System/Kernel/Images/InfiltratorOS-$version.config"
 module_root="$stage/System/Kernel/Modules/InfiltratorOS-$version/kernel"
@@ -114,7 +114,7 @@ make -C "$source" O="$objects" M="$fs/kernel" -j "$jobs" modules \
 }
 module="$fs/kernel/infiltratorfs.ko"
 [[ -s "$module" ]] || fail 'No native InfiltratorFS kernel module'
-[[ $(modinfo -F vermagic "$module" | awk '{print $1}') == "$version-infiltrator" ]] ||
+[[ $(modinfo -F vermagic "$module" | awk '{print $1}') == "$version" ]] ||
   fail 'InfiltratorFS module has incompatible ABI'
 boot_version=0.1.40
 boot_pkg="infiltrator-boot_${boot_version}_amd64.deb"
@@ -144,7 +144,7 @@ Boot_version=$boot_version
 Boot_package_sha256=$(sha256sum "$trial/$boot_pkg" | awk '{print $1}')
 InfiltratorFS_commit=$fs_sha
 InfiltratorOS_resources_commit=$os_sha
-Kernel_product_release=$version-infiltrator
+Kernel_product_release=$version
 Kernel_source_commit=$(git -C "$root" rev-parse HEAD 2>/dev/null || printf 'unavailable')
 EOF
 log 'QEMU/OVMF: Boot must read BOTH real kernel and initramfs from InfiltratorFS'

@@ -88,8 +88,8 @@ for pkg in "$image_pkg" "$header_pkg" "$debug_pkg"; do
   [[ $(dpkg-deb -f "$deb" Version) == "$version-4" ]] ||
     fail "Expected native revision $version-4 in $deb"
   thisabi=$(dpkg-deb -f "$deb" X-InfiltratorOS-Module-ABI)
-  [[ "$thisabi" == "$version-infiltrator" ]] ||
-    fail "Invalid kernel module ABI '$thisabi' in $deb; expected $version-infiltrator (not upstream Linux 7.0.14)"
+  [[ "$thisabi" == "$version" ]] ||
+    fail "Invalid kernel module ABI '$thisabi' in $deb; expected $version (not upstream Linux 7.0.14)"
   if [[ -z "$abi" ]]; then abi=$thisabi; else
     [[ "$abi" == "$thisabi" ]] || fail 'Mixed kernel module ABIs in installer'
   fi

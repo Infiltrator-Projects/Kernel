@@ -26,8 +26,8 @@ if [ "${INFILTRATOROS_NATIVE_PACKAGE:-0}" = 1 ]; then
     echo >&2 'Native InfiltratorOS packaging requires semantic component VERSION'
     exit 1
   fi
-  if [ "${KERNELRELEASE}" != "${native_version}-infiltrator" ]; then
-    echo >&2 "Native package would embed incorrect kernel/module ABI '${KERNELRELEASE}' (expected ${native_version}-infiltrator)"
+  if [ "${KERNELRELEASE}" != "${native_version}" ]; then
+    echo >&2 "Native package would embed incorrect kernel/module ABI '${KERNELRELEASE}' (expected ${native_version})"
     exit 1
   fi
 fi
@@ -88,7 +88,7 @@ install_linux_image () {
 		mkdir -p "$runtime_dir"
 		install -m 0755 "${srctree}/scripts/infiltrator/module-runtime.sh" "$runtime_dir/modprobe"
 		printf "%s\n" "$native_version" > "$runtime_dir/VERSION"
-		sed "s/InfiltratorOS-0.1.0/InfiltratorOS-${native_version}/g" \
+		sed "s/InfiltratorOS-0.1.1/InfiltratorOS-${native_version}/g" \
 			"${srctree}/scripts/infiltrator/infiltratoros-kernel-modules.service" \
 			> "$runtime_dir/infiltratoros-kernel-modules.service"
 		return

@@ -5,11 +5,11 @@ Documentation=https://github.com/Infiltrator-Projects/Kernel
 DefaultDependencies=no
 After=local-fs.target
 Before=systemd-udev-trigger.service sysinit.target
-ConditionPathExists=/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe
+ConditionPathExists=/System/Kernel/Runtime/InfiltratorOS-0.1.1/modprobe
 
 [Service]
 Type=oneshot
-ExecStart=/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe activate
+ExecStart=/System/Kernel/Runtime/InfiltratorOS-0.1.1/modprobe activate
 RemainAfterExit=yes
 
 [Install]
