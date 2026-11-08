@@ -1,0 +1,27 @@
+name: Check independent filesystem module ownership
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/infiltrator/audit-filesystem-modules.py'
+      - 'tests/filesystem-module-ownership.py'
+      - '.github/workflows/filesystem-ownership.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Verify shared-owner filesystem duplication gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and execute ownership regression checks
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/infiltrator/audit-filesystem-modules.py tests/filesystem-module-ownership.py
+          python3 tests/filesystem-module-ownership.py
+          test -z "$(find . -maxdepth 1 -name '*.ko' -print)"
