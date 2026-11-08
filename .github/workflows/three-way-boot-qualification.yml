@@ -11,6 +11,7 @@ on:
       - '.github/workflows/three-way-boot-qualification.yml'
       - 'scripts/infiltrator/test-infiltratorfs-boot.sh'
       - 'tests/infiltratorfs-native-boot.py'
+      - 'tests/infiltratoros-native-payload.py'
   workflow_dispatch:
 
 permissions:
@@ -45,7 +46,7 @@ jobs:
           command -v qemu-system-x86_64
           test -s /usr/share/OVMF/OVMF_CODE_4M.fd
           test -s /usr/share/OVMF/OVMF_VARS_4M.fd
-          python3 -m py_compile tests/infiltratorfs-native-boot.py
+          python3 -m py_compile tests/infiltratorfs-native-boot.py tests/infiltratoros-native-payload.py
           bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
 
       - name: Configure native kernel ABI and minimum QEMU boot hardware
@@ -141,6 +142,10 @@ jobs:
             "$RUNNER_TEMP/InfiltratorOS/Tests" --include serial-reboot.log
           grep -Rl 'INFS_BOOT_PAYLOAD_HASH_PASS' \
             "$RUNNER_TEMP/InfiltratorOS/Tests" --include serial-reboot.log
+          grep -Rl 'INFS_OS_TREE_RESOURCE_VERIFY_PASS' \
+            "$RUNNER_TEMP/InfiltratorOS/Tests" --include serial.log
+          grep -Rl 'INFS_OS_TREE_RESOURCE_VERIFY_PASS' \
+            "$RUNNER_TEMP/InfiltratorOS/Tests" --include serial-reboot.log
           echo 'THREE_WAY_REAL_UEFI_BOOT_AND_DURABILITY_PASS'
 
       - name: Preserve kernel, UEFI, guest serial and filesystem integrity evidence
@@ -160,5 +165,6 @@ jobs:
             ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/qemu-console.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/qemu-console-reboot.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/trial-inputs.sha256
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/os-resource-summary.txt
           if-no-files-found: warn
           retention-days: 30

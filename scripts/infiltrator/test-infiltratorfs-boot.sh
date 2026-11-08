@@ -68,6 +68,7 @@ trial=$(mktemp -d "$workspace/Boot-InfiltratorFS-Kernel.XXXXXXXX") || fail 'Cann
 log "Preserved evidence: $trial"
 fs="$trial/InfiltratorFS"
 fs_sha=c8f6431f2de34806d8614a241cab8db5a0daad48
+os_sha=c1c928e309511796387a70fb81b944bfef5f26b3
 git init -q -b main "$fs"
 git -C "$fs" remote add origin https://github.com/Infiltrator-Projects/InfiltratorFS.git
 git -C "$fs" fetch --no-tags --depth 1 origin "$fs_sha" ||
@@ -75,6 +76,19 @@ git -C "$fs" fetch --no-tags --depth 1 origin "$fs_sha" ||
 git -C "$fs" checkout --detach -q FETCH_HEAD
 [[ $(git -C "$fs" rev-parse HEAD) == "$fs_sha" ]] || fail 'InfiltratorFS source mismatch'
 git -C "$fs" submodule update --init --recursive || fail 'Missing required filesystem submodules'
+log 'Acquiring exact InfiltratorOS native directory layout and real resources'
+os_source="$trial/InfiltratorOS"
+git init -q -b main "$os_source"
+git -C "$os_source" remote add origin https://github.com/Infiltrator-Projects/InfiltratorOS.git
+git -C "$os_source" fetch --no-tags --depth 1 origin "$os_sha" ||
+  fail 'Cannot download pinned InfiltratorOS resource source'
+git -C "$os_source" checkout --detach -q FETCH_HEAD
+[[ $(git -C "$os_source" rev-parse HEAD) == "$os_sha" ]] ||
+  fail 'InfiltratorOS resources source mismatch'
+[[ -s "$os_source/assets/fonts/SHA256SUMS" &&
+   -s "$os_source/assets/icons/PART_SHA256SUMS" &&
+   -s "$os_source/assets/infiltratoros.png" ]] ||
+  fail 'Native InfiltratorOS resources missing'
 log 'Compiling the real InfiltratorFS Format 0.19 EFI reader'
 make -C "$fs/uefi/filesystems" -f Make.gnuefi ARCH=x86_64 \
   INFS_UEFI_TRACE=1 -j "$jobs" > "$trial/UEFI-build.log" 2>&1 || {
@@ -121,10 +135,15 @@ python3 -u "$root/tests/infiltratorfs-native-boot.py" \
   --module "$module" --module-root "$module_root" --kernel-config "$config" \
   --busybox "$busybox" --mkfs "$trial/FilesystemBuild/mkfs.infilfs" \
   --fs-tool "$trial/FilesystemBuild/infilfs-tool" \
+  --os-source "$os_source" \
   --output "$trial/VirtualMachine" > "$trial/Trial.log" 2>&1 || {
   tail -n 120 "$trial/Trial.log" >&2
   fail "Actual 3-way VM trial FAILED; all logs/images remain at $trial";
 }
 grep -Fq 'INFS_BOOT_KERNEL_FILESYSTEM_PASS' "$trial/VirtualMachine/serial.log" ||
   fail 'Guest kernel did not certify the three-project handoff'
+grep -Fq 'INFS_OS_TREE_RESOURCE_VERIFY_PASS' "$trial/VirtualMachine/serial.log" ||
+  fail 'Guest did not verify native OS files after mount'
+grep -Fq 'INFS_OS_TREE_RESOURCE_VERIFY_PASS' "$trial/VirtualMachine/serial-reboot.log" ||
+  fail 'Guest did not verify native OS files after reboot'
 log "PASS: Boot loaded actual kernel from InfiltratorFS, then native .ko mounted/read/wrote it. Evidence: $trial"

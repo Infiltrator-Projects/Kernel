@@ -152,6 +152,14 @@ done
 actual_kernel=$(/bin/busybox sha256sum /rootfs/System/Kernel/Images/InfiltratorOS-0.1.0.img)
 [ "${{actual_kernel%% *}}" = "{kernel_sha256}" ] || fail "STAGED_KERNEL_HASH"
 /bin/busybox echo "INFS_BOOT_PAYLOAD_HASH_PASS" >/dev/console
+# Check canonical InfiltratorOS top-level hierarchy and SHA256 of every real
+# font, icon, and image: 23 fonts + 1,233 icons + artwork on BOTH boots.
+for directory in /Programs /Users /Volumes /Temporary /System/Resources/Fonts /System/Resources/Icons /System/Resources/Images /System/Kernel/Filesystems /System/Preferences; do
+  [ -d "/rootfs$directory" ] || fail "MISSING_OS_DIRECTORY_$directory"
+done
+[ "$(/bin/busybox wc -l </rootfs/System/Resources/Documentation/InfiltratorOS-boot-resources.sha256)" -eq 1257 ] || fail "RESOURCE_COUNT"
+( cd /rootfs && /bin/busybox sha256sum -c System/Resources/Documentation/InfiltratorOS-boot-resources.sha256 >/dev/null ) || fail "OS_RESOURCE_HASH"
+/bin/busybox echo "INFS_OS_TREE_RESOURCE_VERIFY_PASS" >/dev/console
 if [ -e /rootfs/System/Boot/guest-write.txt ]; then
   # The VM is freshly booted for a second time: this must be a durable
   # on-disk write, not the first boot's page cache or mount instance.
@@ -220,6 +228,7 @@ def boot_once(args: argparse.Namespace, esp: Path, image: Path, work: Path,
         "INFS_KERNEL_MODULE_LOAD_PASS",
         "INFS_NATIVE_MOUNT_READ_PASS",
         "INFS_BOOT_PAYLOAD_HASH_PASS",
+        "INFS_OS_TREE_RESOURCE_VERIFY_PASS",
         "INFS_NATIVE_WRITE_PASS" if phase == 1 else "INFS_REBOOT_PERSISTENCE_PASS",
         "INFS_BOOT_KERNEL_FILESYSTEM_PASS",
         "reboot: Power down",
@@ -237,12 +246,17 @@ def main() -> None:
     for name in ("boot", "driver", "kernel", "module", "module-root",
                  "kernel-config", "busybox", "mkfs", "fs-tool", "output"):
         p.add_argument("--" + name, type=Path, required=True)
+    p.add_argument("--os-source", type=Path, required=True,
+                   help="Pinned InfiltratorOS source containing verified native resources")
     p.add_argument("--ovmf", type=Path, default=Path("/usr/share/OVMF"))
     p.add_argument("--timeout", type=int, default=300)
     args = p.parse_args()
     for name in ("boot", "driver", "kernel", "module", "kernel_config", "busybox",
                  "mkfs", "fs_tool"):
         setattr(args, name, require(getattr(args, name)))
+    args.os_source = args.os_source.resolve(strict=True)
+    if not (args.os_source / "assets/fonts/SHA256SUMS").is_file():
+        raise ValueError("Pinned InfiltratorOS native font manifest unavailable")
     args.module_root = args.module_root.resolve(strict=True)
     if not args.module_root.is_dir():
         raise ValueError("Missing compiled native kernel module directory")
@@ -264,9 +278,11 @@ def main() -> None:
     with esp.open("wb") as handle:
         handle.truncate(96 * 1024 * 1024)
     run(args.mkfs, "--force", "-L", "INFILTEST", image)
-    for directory in ("/System", "/System/Kernel", "/System/Kernel/Images",
-                      "/System/Boot", "/boot"):
-        run(args.fs_tool, image, "mkdir", directory)
+    # Recreate the actual InfiltratorOS layout and prepopulate its real
+    # source-verified fonts, icons and artwork before the guest boots.
+    run(sys.executable, Path(__file__).with_name("infiltratoros-native-payload.py"),
+        "--image", image, "--fs-tool", args.fs_tool,
+        "--os-source", args.os_source, "--work", work)
     run(args.fs_tool, image, "put", args.kernel,
         "/System/Kernel/Images/InfiltratorOS-0.1.0.img")
     run(args.fs_tool, image, "put", initrd, "/boot/initrd.img")
@@ -316,7 +332,8 @@ menuentry "InfiltratorFS native kernel trial" {
     manifest.write_text("".join(
         f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p}\n"
         for p in (args.boot, args.driver, args.kernel, args.module,
-                  initrd, config, marker, boot_manifest)
+                  initrd, config, marker, boot_manifest,
+                  work / "os-resource-summary.txt")
     ))
     boot_once(args, esp, image, work, phase=1)
     boot_once(args, esp, image, work, phase=2)
