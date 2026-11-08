@@ -47,7 +47,7 @@ fail() {
 /bin/busybox mount -t devtmpfs devtmpfs /dev || fail devtmpfs
 /bin/busybox mount -t proc proc /proc || fail proc
 /bin/busybox insmod /ext2.ko || fail insmod
-/bin/busybox grep -Eq '^[[:space:]]*ext2
+/bin/busybox grep -Eq '^[[:space:]]*ext2$' /proc/filesystems || fail registration
 /bin/busybox mount -t ext2 -o rw /dev/vda /mnt/ext2 || fail mount
 if [ -f /mnt/ext2/renamed.txt ]; then
   /bin/busybox grep -qx 'EXT2 durable content and rename' /mnt/ext2/renamed.txt || fail persisted_data
@@ -72,6 +72,8 @@ fi
 /bin/busybox poweroff -f
 INIT
 chmod +x "$root/init"
+# The guest script is a separate shell program; parse it before QEMU.
+sh -n "$root/init" || fail 'Invalid generated guest /init shell syntax'
 (cd "$root" && find . -print0 | cpio --null -o -H newc --quiet | gzip -9) > "$out/initramfs.cpio.gz"
 run_vm() {
   local number=$1 serial="$out/guest-$1.serial.log"
