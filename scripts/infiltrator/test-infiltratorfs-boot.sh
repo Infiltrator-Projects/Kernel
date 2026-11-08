@@ -68,7 +68,7 @@ trial=$(mktemp -d "$workspace/Boot-InfiltratorFS-Kernel.XXXXXXXX") || fail 'Cann
 log "Preserved evidence: $trial"
 fs="$trial/InfiltratorFS"
 # Use the exact InfiltratorFS revision whose EFI and native module suites passed.
-fs_sha=ba248871a033477a7de1dfefb0e243e6902c162b
+fs_sha=460a192b98e435120d8ad4bc2461663dd37e8fbb
 os_sha=c1c928e309511796387a70fb81b944bfef5f26b3
 git init -q -b main "$fs"
 git -C "$fs" remote add origin https://github.com/Infiltrator-Projects/InfiltratorFS.git
@@ -116,7 +116,7 @@ module="$fs/kernel/infiltratorfs.ko"
 [[ -s "$module" ]] || fail 'No native InfiltratorFS kernel module'
 [[ $(modinfo -F vermagic "$module" | awk '{print $1}') == "$version-infiltrator" ]] ||
   fail 'InfiltratorFS module has incompatible ABI'
-boot_version=0.1.39
+boot_version=0.1.40
 boot_pkg="infiltrator-boot_${boot_version}_amd64.deb"
 boot_url="https://github.com/Infiltrator-Projects/Boot/releases/download/v$boot_version"
 log "Downloading checksum-verified Boot $boot_version"
