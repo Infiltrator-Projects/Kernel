@@ -162,6 +162,7 @@ jobs:
             ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/qemu-console.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/qemu-console-reboot.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/trial-inputs.sha256
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/SourceRevisions.txt
             ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/os-resource-summary.txt
           if-no-files-found: warn
           retention-days: 30

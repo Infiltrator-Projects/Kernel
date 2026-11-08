@@ -67,7 +67,8 @@ fi
 trial=$(mktemp -d "$workspace/Boot-InfiltratorFS-Kernel.XXXXXXXX") || fail 'Cannot allocate trial workspace'
 log "Preserved evidence: $trial"
 fs="$trial/InfiltratorFS"
-fs_sha=21af8c00c57fc5225146f608c8533f49767d32fe
+# Use the exact InfiltratorFS revision whose EFI and native module suites passed.
+fs_sha=ba248871a033477a7de1dfefb0e243e6902c162b
 os_sha=c1c928e309511796387a70fb81b944bfef5f26b3
 git init -q -b main "$fs"
 git -C "$fs" remote add origin https://github.com/Infiltrator-Projects/InfiltratorFS.git
@@ -135,6 +136,17 @@ mkdir -p "$trial/Boot"
 dpkg-deb -x "$trial/$boot_pkg" "$trial/Boot"
 boot="$trial/Boot/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI"
 [[ -s "$boot" ]] || fail 'Boot EFI executable not found in official package'
+# Preserve the cross-repository input identities alongside the boot serial logs.
+# Never mistake a passed fixed-revision integration test for qualification of
+# newer, unpinned source revisions.
+cat > "$trial/SourceRevisions.txt" <<EOF
+Boot_version=$boot_version
+Boot_package_sha256=$(sha256sum "$trial/$boot_pkg" | awk '{print $1}')
+InfiltratorFS_commit=$fs_sha
+InfiltratorOS_resources_commit=$os_sha
+Kernel_product_release=$version-infiltrator
+Kernel_source_commit=$(git -C "$root" rev-parse HEAD 2>/dev/null || printf 'unavailable')
+EOF
 log 'QEMU/OVMF: Boot must read BOTH real kernel and initramfs from InfiltratorFS'
 python3 -u "$root/tests/infiltratorfs-native-boot.py" \
   --boot "$boot" --driver "$driver" --kernel "$kernel" \
