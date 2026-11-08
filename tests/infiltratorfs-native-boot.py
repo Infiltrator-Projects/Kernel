@@ -150,7 +150,7 @@ done
 # the on-disk manifest. This guards against a stale or incorrect EFI source.
 ( cd /rootfs && /bin/busybox sha256sum -c System/Boot/boot-payloads.sha256 ) >/dev/console 2>&1 || fail "BOOT_PAYLOAD_HASH"
 actual_kernel=$(/bin/busybox sha256sum /rootfs/System/Kernel/Images/InfiltratorOS-0.1.0.img)
-[ "${actual_kernel%% *}" = "{kernel_sha256}" ] || fail "STAGED_KERNEL_HASH"
+[ "${{actual_kernel%% *}}" = "{kernel_sha256}" ] || fail "STAGED_KERNEL_HASH"
 /bin/busybox echo "INFS_BOOT_PAYLOAD_HASH_PASS" >/dev/console
 if [ -e /rootfs/System/Boot/guest-write.txt ]; then
   # The VM is freshly booted for a second time: this must be a durable
