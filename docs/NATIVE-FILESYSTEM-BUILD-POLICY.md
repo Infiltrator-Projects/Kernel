@@ -9,8 +9,10 @@ To stop recompiling those implementations, the native builder calls
 `scripts/infiltrator/prune-external-filesystems.py apply` on its **private
 build object `.config`**, then runs `olddefconfig` and
 `prune-external-filesystems.py check` before any real build.
-The actual three-way Boot → InfiltratorFS → Kernel QEMU workflow applies
-and checks the exact same profile.
+The actual three-way Boot → InfiltratorFS → Kernel QEMU workflow and
+the independent EXT2 external-module/two-boot QEMU qualification both apply
+and check the exact same profile. EXT2's own test still explicitly disables
+the in-tree EXT2 driver before compiling its independent replacement.
 
 ## Excluded from the native kernel image and module build
 

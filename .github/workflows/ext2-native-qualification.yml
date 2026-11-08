@@ -68,7 +68,12 @@ jobs:
             -d MODULE_SIG -d DEBUG_INFO \
             --set-str SYSTEM_TRUSTED_KEYS '' \
             --set-str SYSTEM_REVOCATION_KEYS ''
+          # EXT2 is explicitly tested as an external native-ABI module.
+          # Suppress all other independently owned non-boot filesystems too,
+          # otherwise this separate test recompiles their generic in-tree VFS.
+          python3 scripts/infiltrator/prune-external-filesystems.py apply "$obj/.config"
           make O="$obj" KERNELRELEASE="$NATIVE_RELEASE" olddefconfig
+          python3 scripts/infiltrator/prune-external-filesystems.py check "$obj/.config"
           grep -Fqx '# CONFIG_EXT2_FS is not set' "$obj/.config"
           grep -Fqx '# CONFIG_EXT4_USE_FOR_EXT2 is not set' "$obj/.config" || \
             ! grep -Fqx 'CONFIG_EXT4_USE_FOR_EXT2=y' "$obj/.config"
