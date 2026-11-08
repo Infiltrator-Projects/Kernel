@@ -37,7 +37,7 @@ def main() -> None:
         config.write_text("CONFIG_VIRTIO_PCI=y\nCONFIG_VIRTIO_BLK=y\n")
         try:
             boot.modules_for_vm(modules, root / "infiltratorfs.ko",
-                                "0.1.0-infiltrator", config)
+                                "0.1.1", config)
         except ValueError as exc:
             assert "Ambiguous native module" in str(exc), str(exc)
         else:

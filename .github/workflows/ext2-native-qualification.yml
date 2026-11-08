@@ -6,9 +6,6 @@ name: Qualify independent EXT2 against InfiltratorOS Kernel
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/ext2-native-qualification.yml'
-      - 'tests/test-ext2-module-qemu.sh'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +13,7 @@ permissions:
 
 concurrency:
   group: ext2-native-qualification-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   ext2-native:
@@ -24,8 +21,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 95
     env:
-      EXT2_COMMIT: ee6aa36a37f2cb96a9007d38e985a0d76a819cd4
-      NATIVE_RELEASE: 0.1.0-infiltrator
+      EXT2_COMMIT: 86247ecb7828b2e3a312c0ee36e9fe51ceef5231
+      NATIVE_RELEASE: 0.1.1
     steps:
       - name: Checkout Kernel main
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
@@ -39,7 +36,7 @@ jobs:
             kmod busybox-static qemu-system-x86 qemu-utils \
             e2fsprogs cpio gzip file python3 git
           bash -n tests/test-ext2-module-qemu.sh
-          test "$(cat VERSION)" = 0.1.0
+          test "$(cat VERSION)" = 0.1.1
 
       - name: Fetch pinned independent EXT2 owner source
         run: |
@@ -53,7 +50,7 @@ jobs:
           test -s "$provider/native/filesystems/ext2/linux/Makefile"
           echo "EXT2_PROVIDER=$provider" >> "$GITHUB_ENV"
 
-      - name: Configure and build actual 0.1.0-infiltrator ABI and modules
+      - name: Configure and build actual 0.1.1 ABI and modules
         timeout-minutes: 60
         run: |
           set -euo pipefail

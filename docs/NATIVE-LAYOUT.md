@@ -178,14 +178,14 @@ The previous `0.1.0-2` layout correction was incomplete: those
 binaries were still built with the **upstream Linux-derived**
 `7.0.14-infiltrator` release and module ABI. The current corrected
 first-party builder produces **InfiltratorOS Kernel 0.1.0** with
-Kbuild UTS release and module ABI **`0.1.0-infiltrator`**, using
+Kbuild UTS release and module ABI **`0.1.1`**, using
 Debian package revision **`0.1.0-3`** for the ABI correction,
 and **`0.1.0-4`** for the first native kmod/firmware runtime integration. The source `Makefile`
 remains upstream Linux `7.0.14` for internal Linux API compatibility.
 Native package generation refuses to label new binaries
 `7.0.14-infiltrator`. The historical no-compile repacker can still
 handle the older source binaries but does not substitute for an actual
-freshly compiled `0.1.0-infiltrator` kernel. Native image/modules install in `Images`
+freshly compiled `0.1.1` kernel. Native image/modules install in `Images`
 and `Modules`; optional developer files in `Headers` and `Debug`.
 All these are defined in the authoritative OS filesystem contract.
 Native packages have **no** legacy Debian kernel maintainer hooks that
@@ -268,7 +268,7 @@ An ESP containing **no kernel and no initramfs** holds only Boot and the
 InfiltratorFS-owned `drivers_x64/InfiltratorFS_x64.efi` reader.
 Both the real kernel image and initramfs live in the separate
 Format 0.19 InfiltratorFS disk image. Successful guest evidence must
-prove UEFI access, native `0.1.0-infiltrator` execution and a mounted
+prove UEFI access, native `0.1.1` execution and a mounted
 read/write operation through the matched `infiltratorfs.ko`.
 
 This is an explicitly isolated QEMU/OVMF test using only image files:

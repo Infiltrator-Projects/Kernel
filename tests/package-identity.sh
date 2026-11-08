@@ -14,25 +14,25 @@ CONFIG
 printf 'CONFIG_MODULES=y\n' > "$testdir/.config"
 (
   cd "$testdir"
-  env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=0.1.0-infiltrator \
+  env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=0.1.1 \
     srctree="$root" KCONFIG_CONFIG="$testdir/.config" \
-    INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.0 \
+    INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.1 \
     sh "$root/scripts/package/mkdebian"
 )
 control="$testdir/debian/control"
 changelog="$testdir/debian/changelog"
 grep -Fxq 'Source: infiltratoros-kernel' "$control"
-grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0' "$control"
-grep -Fxq 'Package: infiltratoros-kernel-image-0.1.0-dbg' "$control"
-grep -Fxq 'Package: infiltratoros-kernel-headers-0.1.0' "$control"
-grep -Fxq 'XB-X-InfiltratorOS-Kernel-Version: 0.1.0' "$control"
-grep -Fxq 'XB-X-InfiltratorOS-Module-ABI: 0.1.0-infiltrator' "$control"
-[[ $(grep -Fc 'XB-X-InfiltratorOS-Module-ABI: 0.1.0-infiltrator' "$control") -eq 3 ]]
+grep -Fxq 'Package: infiltratoros-kernel-image-0.1.1' "$control"
+grep -Fxq 'Package: infiltratoros-kernel-image-0.1.1-dbg' "$control"
+grep -Fxq 'Package: infiltratoros-kernel-headers-0.1.1' "$control"
+grep -Fxq 'XB-X-InfiltratorOS-Kernel-Version: 0.1.1' "$control"
+grep -Fxq 'XB-X-InfiltratorOS-Module-ABI: 0.1.1' "$control"
+[[ $(grep -Fc 'XB-X-InfiltratorOS-Module-ABI: 0.1.1' "$control") -eq 3 ]]
 
 # A source debian/control check alone was insufficient: dpkg-gencontrol
 # silently removed the earlier X- fields before the compiled .deb was built.
 # Exercise the REAL Debian binary-control generation and read back the .deb.
-binary_package=infiltratoros-kernel-image-0.1.0
+binary_package=infiltratoros-kernel-image-0.1.1
 mkdir -p "$testdir/debian/$binary_package/DEBIAN"
 (
   cd "$testdir"
@@ -41,10 +41,10 @@ mkdir -p "$testdir/debian/$binary_package/DEBIAN"
 )
 cp "$testdir/generated-binary-control" "$testdir/debian/$binary_package/DEBIAN/control"
 dpkg-deb --build "$testdir/debian/$binary_package" "$testdir/native-identity.deb" >/dev/null
-[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Kernel-Version) == 0.1.0 ]]
-[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Module-ABI) == 0.1.0-infiltrator ]]
+[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Kernel-Version) == 0.1.1 ]]
+[[ $(dpkg-deb -f "$testdir/native-identity.deb" X-InfiltratorOS-Module-ABI) == 0.1.1 ]]
 ! grep -Eq '^Package: linux-(image|headers|libc-dev)' "$control"
-head -n1 "$changelog" | grep -Fq 'infiltratoros-kernel (0.1.0-4)'
+head -n1 "$changelog" | grep -Fq 'infiltratoros-kernel (0.1.1-4)'
 grep -Fq 'infiltratoros-kernel-image-%' "$root/scripts/package/debian/rules"
 grep -Fq 'infiltratoros-kernel-headers-%' "$root/scripts/package/debian/rules"
 grep -Fq 'infiltratoros-kernel-image-*' "$root/scripts/package/builddeb"
@@ -60,7 +60,7 @@ grep -Fq 'System/Kernel/Debug/InfiltratorOS-' "$root/scripts/package/builddeb"
 grep -Fq 'packageversion=${product_version}-4' "$root/scripts/package/mkdebian"
 
 
-# Regression: InfiltratorOS 0.1.0 must NOT silently inherit Linux 7.0.14.
+# Regression: InfiltratorOS 0.1.1 must NOT silently inherit Linux 7.0.14.
 # Native packaging must reject a stale KERNELRELEASE before it emits .debs.
 mkdir -p "$testdir/wrong-native/include/config"
 cp "$testdir/include/config/auto.conf" "$testdir/wrong-native/include/config/auto.conf"
@@ -68,10 +68,10 @@ if (
   cd "$testdir/wrong-native"
   env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=7.0.14-infiltrator \
     srctree="$root" KCONFIG_CONFIG="$testdir/.config" \
-    INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.0 \
+    INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.1 \
     sh "$root/scripts/package/mkdebian"
 ) > "$testdir/wrong-abi.log" 2>&1; then
-  echo 'FAIL: Native 0.1.0 packaging accepted Linux 7.0.14 ABI' >&2
+  echo 'FAIL: Native 0.1.1 packaging accepted Linux 7.0.14 ABI' >&2
   exit 1
 fi
 grep -Fq 'Native InfiltratorOS package ABI mismatch' "$testdir/wrong-abi.log"

@@ -29,7 +29,7 @@ grep -Fq 'sha256sum -c SHA256SUMS.txt' scripts/infiltrator/test-ovmf-handoff.sh
 bash scripts/build-native.sh --help | grep -q -- '--build-only'
 grep -q -- 'linux-headers-' scripts/build-native.sh
 grep -Fq 'KERNELRELEASE="$release_id"' scripts/build-native.sh
-grep -Fq 'release_id="$product_version-infiltrator"' scripts/build-native.sh
+grep -Fq 'release_id="$product_version"' scripts/build-native.sh
 grep -Fq 'utsrelease.h' scripts/build-native.sh
 grep -Fq -- '--set-str MODPROBE_PATH' scripts/build-native.sh
 grep -q -- 'bindeb-pkg' scripts/build-native.sh

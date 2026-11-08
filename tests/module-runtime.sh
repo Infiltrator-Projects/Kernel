@@ -6,7 +6,7 @@ root=$(cd "$(dirname "$0")/.." && pwd -P)
 sandbox=$(mktemp -d)
 trap 'rm -rf -- "$sandbox"' EXIT
 version=$(tr -d '\r\n' < "$root/VERSION")
-abi="$version-infiltrator"
+abi="$version"
 module_base="$sandbox/System/Kernel/Modules/InfiltratorOS-$version"
 runtime="$sandbox/System/Kernel/Runtime/InfiltratorOS-$version"
 provider="$sandbox/System/Kernel/Filesystems"

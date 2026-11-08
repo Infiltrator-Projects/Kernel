@@ -4,7 +4,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 version=$(tr -d '\r\n' < "$root/VERSION")
-abi=0.1.0-infiltrator
+abi="$version"
 sandbox=$(mktemp -d)
 trap 'rm -rf -- "$sandbox"' EXIT
 packages="$sandbox/Packages"
@@ -68,7 +68,7 @@ if INFILTRATOROS_TEMP_ROOT="$temp_root" \
   exit 1
 fi
 grep -Fq 'Refusing to overwrite existing native kernel installation' "$sandbox/reinstall.log"
-# Previously published 0.1.0 packages may already occupy these paths.
+# Previously published 0.1.1 packages may already occupy these paths.
 # Repair MUST require explicit approval, preserve their bytes and leave
 # independent filesystem providers unchanged.
 printf 'old wrong-ABI kernel image\n' > "$install_root/System/Kernel/Images/InfiltratorOS-$version.img"
