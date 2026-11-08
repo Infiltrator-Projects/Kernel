@@ -14,7 +14,9 @@ permissions:
 
 concurrency:
   group: three-way-boot-${{ github.ref }}
-  cancel-in-progress: true
+  # A new commit can arrive while the real native Kernel is compiling.
+  # Retain the current qualification instead of losing all boot evidence.
+  cancel-in-progress: false
 
 jobs:
   three-way-boot:
