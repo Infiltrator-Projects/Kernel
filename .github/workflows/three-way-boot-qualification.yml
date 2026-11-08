@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This is the first real integration of the three first-party repositories.
+# Unlike the lightweight .run release job, it compiles an actual Linux kernel
+# and boots it under QEMU/OVMF from an InfiltratorFS Format 0.19 volume.
+name: Three-way Boot + InfiltratorFS + Kernel VM qualification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/three-way-boot-qualification.yml'
+      - 'scripts/infiltrator/test-infiltratorfs-boot.sh'
+      - 'tests/infiltratorfs-native-boot.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: three-way-boot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  three-way-boot:
+    name: Real UEFI Boot from native InfiltratorFS volume
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - name: Checkout full InfiltratorOS kernel sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install isolated VM, kernel and native filesystem build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
+            dwarves cpio rsync kmod busybox-static qemu-system-x86 qemu-utils \
+            ovmf dosfstools mtools gnu-efi cmake pkg-config python3 git wget \
+            file zstd liblz4-dev
+          df -h .
+          command -v qemu-system-x86_64
+          test -s /usr/share/OVMF/OVMF_CODE_4M.fd
+          test -s /usr/share/OVMF/OVMF_VARS_4M.fd
+
+      - name: Configure native kernel ABI and minimum QEMU boot hardware
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat VERSION)" = 0.1.0
+          mkdir -p "$RUNNER_TEMP/InfiltratorOS/Build/obj"
+          obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
+          make O="$obj" x86_64_defconfig
+          # Built-in storage devices are essential before root userspace
+          # can load any optional filesystem module from the initramfs.
+          scripts/config --file "$obj/.config" \
+            -e EFI -e EFI_STUB -e PCI -e VIRTIO \
+            -e VIRTIO_PCI -e VIRTIO_BLK \
+            -e MODULES -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
+            -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
+            -e RD_GZIP -e BLK_DEV \
+            -d MODULE_SIG -d SYSTEM_TRUSTED_KEYRING \
+            --set-str SYSTEM_TRUSTED_KEYS '' \
+            --set-str SYSTEM_REVOCATION_KEYS '' \
+            --set-str MODPROBE_PATH '/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe' \
+            -d DEBUG_INFO
+          make O="$obj" KERNELRELEASE=0.1.0-infiltrator olddefconfig
+          make O="$obj" KERNELRELEASE=0.1.0-infiltrator prepare
+          grep -Fqx 'CONFIG_EFI_STUB=y' "$obj/.config"
+          grep -Fqx 'CONFIG_VIRTIO_PCI=y' "$obj/.config"
+          grep -Fqx 'CONFIG_VIRTIO_BLK=y' "$obj/.config"
+          grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
+          grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"
+          grep -Fqx 'CONFIG_DEVTMPFS=y' "$obj/.config"
+          grep -Fqx 'CONFIG_SERIAL_8250_CONSOLE=y' "$obj/.config"
+          grep -Fqx 'CONFIG_MODPROBE_PATH="/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe"' "$obj/.config"
+          test "$(cat "$obj/include/config/kernel.release")" = 0.1.0-infiltrator
+
+      - name: Compile the real InfiltratorOS kernel and matching module tree
+        shell: bash
+        timeout-minutes: 65
+        run: |
+          set -euo pipefail
+          obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
+          # Retain the canonical version, not the imported Linux 7.0.14 ABI.
+          make O="$obj" KERNELRELEASE=0.1.0-infiltrator \
+            -j 4 bzImage modules > "$RUNNER_TEMP/Kernel-build.log" 2>&1 || {
+            tail -n 130 "$RUNNER_TEMP/Kernel-build.log" >&2
+            exit 1
+          }
+          test -s "$obj/arch/x86/boot/bzImage"
+          grep -Fqx '#define UTS_RELEASE "0.1.0-infiltrator"' "$obj/include/generated/utsrelease.h"
+          echo 'REAL_INFILTRATOROS_KERNEL_COMPILE_PASS'
+
+      - name: Stage actual native kernel without installing it on the runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
+          stage="$RUNNER_TEMP/InfiltratorOS/Staging/ThreeWay"
+          images="$stage/System/Kernel/Images"
+          modules="$stage/System/Kernel/Modules/InfiltratorOS-0.1.0/kernel"
+          mkdir -p "$images" "$modules"
+          cp "$obj/arch/x86/boot/bzImage" "$images/InfiltratorOS-0.1.0.img"
+          cp "$obj/.config" "$images/InfiltratorOS-0.1.0.config"
+          # Module dependency discovery must see the *actual* built tree.
+          # Do not copy host Ubuntu modules with a different vermagic.
+          while IFS= read -r -d '' ko; do
+            relative="${ko#"$obj"/}"
+            mkdir -p "$modules/$(dirname "$relative")"
+            cp "$ko" "$modules/$relative"
+          done < <(find "$obj" -type f -name '*.ko' -print0)
+          find "$modules" -type f -name '*.ko' | wc -l
+          echo "NATIVE_STAGE=$stage" >> "$GITHUB_ENV"
+          echo "NATIVE_OBJECTS=$obj" >> "$GITHUB_ENV"
+          echo 'NATIVE_KERNEL_STAGE_PASS'
+
+      - name: Boot from InfiltratorFS using real Boot EFI and real Kernel
+        shell: bash
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/InfiltratorOS/Tests"
+          bash scripts/infiltrator/test-infiltratorfs-boot.sh \
+            --source "$GITHUB_WORKSPACE" \
+            --objects "$NATIVE_OBJECTS" \
+            --stage "$NATIVE_STAGE" \
+            --workspace "$RUNNER_TEMP/InfiltratorOS/Tests" \
+            --jobs 4
+          grep -Rl 'INFS_BOOT_KERNEL_FILESYSTEM_PASS' \
+            "$RUNNER_TEMP/InfiltratorOS/Tests" --include serial.log
+          echo 'THREE_WAY_REAL_UEFI_BOOT_PASS'
+
+      - name: Preserve kernel, UEFI, guest serial and filesystem integrity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThreeWay-Boot-InfiltratorFS-Kernel-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/Kernel-build.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/UEFI-build.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/CMake.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/FilesystemBuild.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/KernelModuleBuild.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/Trial.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/serial.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/qemu-console.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/**/VirtualMachine/trial-inputs.sha256
+          if-no-files-found: warn
+          retention-days: 30
