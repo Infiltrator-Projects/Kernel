@@ -67,7 +67,7 @@ fi
 trial=$(mktemp -d "$workspace/Boot-InfiltratorFS-Kernel.XXXXXXXX") || fail 'Cannot allocate trial workspace'
 log "Preserved evidence: $trial"
 fs="$trial/InfiltratorFS"
-fs_sha=c8f6431f2de34806d8614a241cab8db5a0daad48
+fs_sha=38b8937e627bbe25e3c9094db7c41db41f84616e
 os_sha=c1c928e309511796387a70fb81b944bfef5f26b3
 git init -q -b main "$fs"
 git -C "$fs" remote add origin https://github.com/Infiltrator-Projects/InfiltratorFS.git
@@ -122,8 +122,14 @@ log "Downloading checksum-verified Boot $boot_version"
 wget -q -O "$trial/$boot_pkg" "$boot_url/$boot_pkg" || fail 'Boot download failed'
 wget -q -O "$trial/BOOT-SHA256SUMS.txt" "$boot_url/SHA256SUMS.txt" ||
   fail 'Boot checksum inventory download failed'
-grep -F "  $boot_pkg" "$trial/BOOT-SHA256SUMS.txt" > "$trial/boot-verify.txt" ||
-  fail 'Boot package checksum missing'
+# Match exactly one package name and a complete SHA-256, never a substring.
+awk -v package="$boot_pkg" '
+  $2 == package && length($1) == 64 && $1 !~ /[^0123456789abcdef]/ {
+    print $1 "  " $2; matches++
+  }
+  END { if (matches != 1) exit 1 }
+' "$trial/BOOT-SHA256SUMS.txt" > "$trial/boot-verify.txt" ||
+  fail 'Boot package checksum missing, repeated or invalid'
 (cd "$trial" && sha256sum -c boot-verify.txt) || fail 'Boot integrity verification failed'
 mkdir -p "$trial/Boot"
 dpkg-deb -x "$trial/$boot_pkg" "$trial/Boot"

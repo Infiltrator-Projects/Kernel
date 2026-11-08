@@ -47,6 +47,7 @@ jobs:
           test -s /usr/share/OVMF/OVMF_CODE_4M.fd
           test -s /usr/share/OVMF/OVMF_VARS_4M.fd
           python3 -m py_compile tests/infiltratorfs-native-boot.py tests/infiltratoros-native-payload.py
+          python3 tests/test-integration-preflight.py
           bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
 
       - name: Configure native kernel ABI and minimum QEMU boot hardware

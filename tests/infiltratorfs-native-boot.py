@@ -62,9 +62,13 @@ def modules_for_vm(module_root: Path, infil_module: Path, kernel_release: str,
                    kernel_config: Path) -> list[tuple[str, bytes]]:
     config = kernel_config.read_text()
     module_index: dict[str, Path] = {}
-    for path in module_root.rglob("*.ko*"):
+    for path in sorted(module_root.rglob("*.ko*")):
         if path.is_file() and re.search(r"\.ko(?:\.(?:xz|zst|gz))?$", path.name):
-            module_index.setdefault(module_name(path), path)
+            name = module_name(path)
+            if name in module_index and module_index[name] != path:
+                raise ValueError(f"Ambiguous native module {name}: "
+                                 f"{module_index[name]} and {path}")
+            module_index[name] = path
     module_index["infiltratorfs"] = infil_module
     builtin = set()
     for line in config.splitlines():
@@ -89,7 +93,8 @@ def modules_for_vm(module_root: Path, infil_module: Path, kernel_release: str,
                 return
             raise ValueError(f"Missing required native module: {name}")
         loading.add(name)
-        vermagic = cmd_out("modinfo", "-F", "vermagic", path).split()[0]
+        metadata = cmd_out("modinfo", "-F", "vermagic", path).split()
+        vermagic = metadata[0] if metadata else "<missing>"
         if vermagic != kernel_release:
             raise ValueError(f"Wrong module ABI for {path}: {vermagic}, need {kernel_release}")
         deps = cmd_out("modinfo", "-F", "depends", path)
@@ -107,7 +112,8 @@ def modules_for_vm(module_root: Path, infil_module: Path, kernel_release: str,
 
 
 def make_initramfs(busybox: Path, modules: list[tuple[str, bytes]],
-                   release: str, destination: Path, kernel_sha256: str) -> None:
+                   release: str, destination: Path, kernel_sha256: str,
+                   product_version: str) -> None:
     module_commands = "\n".join(
         f'/bin/busybox insmod /modules/{name}.ko || fail "MODULE_{name}"'
         for name, _ in modules
@@ -149,7 +155,7 @@ done
 # The kernel digest is also pinned inside the initramfs, independently of
 # the on-disk manifest. This guards against a stale or incorrect EFI source.
 ( cd /rootfs && /bin/busybox sha256sum -c System/Boot/boot-payloads.sha256 ) >/dev/console 2>&1 || fail "BOOT_PAYLOAD_HASH"
-actual_kernel=$(/bin/busybox sha256sum /rootfs/System/Kernel/Images/InfiltratorOS-0.1.0.img)
+actual_kernel=$(/bin/busybox sha256sum /rootfs/System/Kernel/Images/InfiltratorOS-{product_version}.img)
 [ "${{actual_kernel%% *}}" = "{kernel_sha256}" ] || fail "STAGED_KERNEL_HASH"
 /bin/busybox echo "INFS_BOOT_PAYLOAD_HASH_PASS" >/dev/console
 # Check canonical InfiltratorOS top-level hierarchy and SHA256 of every real
@@ -249,8 +255,10 @@ def main() -> None:
     p.add_argument("--os-source", type=Path, required=True,
                    help="Pinned InfiltratorOS source containing verified native resources")
     p.add_argument("--ovmf", type=Path, default=Path("/usr/share/OVMF"))
-    p.add_argument("--timeout", type=int, default=300)
+    p.add_argument("--timeout", type=int, default=600)
     args = p.parse_args()
+    if not 1 <= args.timeout <= 3600:
+        raise ValueError("QEMU timeout must be between 1 and 3600 seconds")
     for name in ("boot", "driver", "kernel", "module", "kernel_config", "busybox",
                  "mkfs", "fs_tool"):
         setattr(args, name, require(getattr(args, name)))
@@ -260,7 +268,10 @@ def main() -> None:
     args.module_root = args.module_root.resolve(strict=True)
     if not args.module_root.is_dir():
         raise ValueError("Missing compiled native kernel module directory")
-    release = "0.1.0-infiltrator"
+    product_version = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}", product_version):
+        raise ValueError("Invalid InfiltratorOS Kernel product VERSION")
+    release = f"{product_version}-infiltrator"
     if cmd_out("modinfo", "-F", "vermagic", args.module).split()[0] != release:
         raise ValueError("InfiltratorFS .ko was not compiled against the InfiltratorOS kernel")
     work = args.output.resolve()
@@ -270,7 +281,8 @@ def main() -> None:
     initrd = work / "initrd.img"
     modules = modules_for_vm(args.module_root, args.module, release, args.kernel_config)
     make_initramfs(args.busybox, modules, release, initrd,
-                   hashlib.sha256(args.kernel.read_bytes()).hexdigest())
+                   hashlib.sha256(args.kernel.read_bytes()).hexdigest(),
+                   product_version)
     image = work / "infiltratorfs.raw"
     esp = work / "esp.img"
     with image.open("wb") as handle:
@@ -284,7 +296,7 @@ def main() -> None:
         "--image", image, "--fs-tool", args.fs_tool,
         "--os-source", args.os_source, "--work", work)
     run(args.fs_tool, image, "put", args.kernel,
-        "/System/Kernel/Images/InfiltratorOS-0.1.0.img")
+        f"/System/Kernel/Images/InfiltratorOS-{product_version}.img")
     run(args.fs_tool, image, "put", initrd, "/boot/initrd.img")
     marker = work / "source-identity.txt"
     marker.write_text("INFS_BOOT_DISK_EXCLUSIVE\n")
@@ -292,7 +304,7 @@ def main() -> None:
     # Store the expected full-file digests on the native filesystem, not ESP.
     boot_manifest = work / "boot-payloads.sha256"
     manifest_files = (
-        ("System/Kernel/Images/InfiltratorOS-0.1.0.img", args.kernel),
+        (f"System/Kernel/Images/InfiltratorOS-{product_version}.img", args.kernel),
         ("boot/initrd.img", initrd),
         ("System/Boot/source-identity.txt", marker),
     )
@@ -309,21 +321,21 @@ def main() -> None:
     run("mcopy", "-i", esp, args.driver,
         "::/EFI/BOOT/drivers_x64/InfiltratorFS_x64.efi")
     config = work / "boot.conf"
-    config.write_text(r"""timeout 1
+    config.write_text(rf"""timeout 1
 textonly true
 use_nvram false
 driver_diagnostics true
 scanfor manual
 showtools shutdown
-menuentry "InfiltratorFS native kernel trial" {
+menuentry "InfiltratorFS native kernel trial" {{
     volume INFILTEST
-    loader \System\Kernel\Images\InfiltratorOS-0.1.0.img
+    loader \System\Kernel\Images\InfiltratorOS-{product_version}.img
     initrd \boot\initrd.img
     linux_load memory
     ostype Linux
     graphics off
     options "console=ttyS0,115200 rdinit=/init panic=-1"
-}
+}}
 """)
     run("mcopy", "-i", esp, config, "::/EFI/BOOT/boot.conf")
     # Explicitly no kernel or initrd is copied to the FAT32 ESP; the EFI
