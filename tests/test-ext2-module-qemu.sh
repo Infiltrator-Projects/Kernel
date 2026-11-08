@@ -52,71 +52,19 @@ fail() {
 if [ -f /mnt/ext2/renamed.txt ]; then
   /bin/busybox grep -qx 'EXT2 durable content and rename' /mnt/ext2/renamed.txt || fail persisted_data
   /bin/busybox grep -qx 'Cloud-verified EXT2 source fixture' /mnt/ext2/source.txt || fail persisted_fixture
+  /bin/busybox grep -qx 'EXT2 nested directory content' /mnt/ext2/tree/nested.txt || fail persisted_directory
   echo EXT2_SECOND_BOOT_PERSISTENCE_PASS
 else
   /bin/busybox grep -qx 'Cloud-verified EXT2 source fixture' /mnt/ext2/source.txt || fail fixture
   echo 'EXT2 durable content and rename' > /mnt/ext2/new.txt || fail write
   /bin/busybox mv /mnt/ext2/new.txt /mnt/ext2/renamed.txt || fail rename
+  /bin/busybox mkdir /mnt/ext2/tree || fail mkdir
+  echo 'EXT2 nested directory content' > /mnt/ext2/tree/nested.txt || fail directory_write
   /bin/busybox sync
   /bin/busybox umount /mnt/ext2 || fail unmount1
   /bin/busybox mount -t ext2 /dev/vda /mnt/ext2 || fail remount
   /bin/busybox grep -qx 'EXT2 durable content and rename' /mnt/ext2/renamed.txt || fail remount_data
-  echo EXT2_FIRST_BOOT_MOUNT_WRITE_RENAME_REMOUNT_PASS
-fi
-/bin/busybox sync
-/bin/busybox umount /mnt/ext2 || fail unmount_final
-/bin/busybox poweroff -f
-INIT
-chmod +x "$root/init"
-(cd "$root" && find . -print0 | cpio --null -o -H newc --quiet | gzip -9) > "$out/initramfs.cpio.gz"
-run_vm() {
-  local number=$1 serial="$out/guest-$1.serial.log"
-  log "Running isolated QEMU guest $number (EXT2 image persists across boots)"
-  # Virtio block is built in, not loaded from the userspace module tree.
-  timeout --signal=TERM --kill-after=10s 110s qemu-system-x86_64 \
-    -nodefaults -machine q35 -m 1024 -smp 2 -display none \
-    -no-reboot -monitor none -serial "file:$serial" \
-    -kernel "$kernel" -initrd "$out/initramfs.cpio.gz" \
-    -append 'console=ttyS0,115200 rdinit=/init panic=1' \
-    -device virtio-blk-pci,drive=ext2disk \
-    -drive "if=none,id=ext2disk,format=raw,file=$image,cache=writeback" \
-    > "$out/qemu-$number.log" 2>&1 ||
-    fail "QEMU guest $number did not exit cleanly; examine $serial"
-  if grep -Fq 'EXT2_GUEST_FAIL:' "$serial"; then
-    fail "Guest $number reported a module/filesystem failure"
-  fi
-}
-run_vm 1
-grep -Fq 'EXT2_FIRST_BOOT_MOUNT_WRITE_RENAME_REMOUNT_PASS' "$out/guest-1.serial.log" ||
-  fail 'First guest failed to prove mount, write, rename and remount'
-log 'Read-only offline ext2 fsck after first boot'
-e2fsck -fn "$image" > "$out/e2fsck-first.log" 2>&1 ||
-  fail 'First offline fsck found errors'
-run_vm 2
-grep -Fq 'EXT2_SECOND_BOOT_PERSISTENCE_PASS' "$out/guest-2.serial.log" ||
-  fail 'Second independent boot failed persistent-data checks'
-e2fsck -fn "$image" > "$out/e2fsck-second.log" 2>&1 ||
-  fail 'Second offline fsck found errors'
-debugfs -R 'cat /renamed.txt' "$image" 2> "$out/debugfs.log" |
-  grep -qx 'EXT2 durable content and rename' ||
-  fail 'Offline independent reader did not see renamed data'
-[[ $expected_hash == "$(debugfs -R 'cat /source.txt' "$image" 2>/dev/null | sha256sum | cut -d' ' -f1)" ]] ||
-  fail 'Original fixture digest changed'
-log 'EXT2_KERNEL_0.1.0_TWO_BOOT_RW_RENAME_DURABILITY_PASS'
- /proc/filesystems || fail registration
-/bin/busybox mount -t ext2 -o rw /dev/vda /mnt/ext2 || fail mount
-if [ -f /mnt/ext2/renamed.txt ]; then
-  /bin/busybox grep -qx 'EXT2 durable content and rename' /mnt/ext2/renamed.txt || fail persisted_data
-  /bin/busybox grep -qx 'Cloud-verified EXT2 source fixture' /mnt/ext2/source.txt || fail persisted_fixture
-  echo EXT2_SECOND_BOOT_PERSISTENCE_PASS
-else
-  /bin/busybox grep -qx 'Cloud-verified EXT2 source fixture' /mnt/ext2/source.txt || fail fixture
-  echo 'EXT2 durable content and rename' > /mnt/ext2/new.txt || fail write
-  /bin/busybox mv /mnt/ext2/new.txt /mnt/ext2/renamed.txt || fail rename
-  /bin/busybox sync
-  /bin/busybox umount /mnt/ext2 || fail unmount1
-  /bin/busybox mount -t ext2 /dev/vda /mnt/ext2 || fail remount
-  /bin/busybox grep -qx 'EXT2 durable content and rename' /mnt/ext2/renamed.txt || fail remount_data
+  /bin/busybox grep -qx 'EXT2 nested directory content' /mnt/ext2/tree/nested.txt || fail remount_directory
   echo EXT2_FIRST_BOOT_MOUNT_WRITE_RENAME_REMOUNT_PASS
 fi
 /bin/busybox sync
