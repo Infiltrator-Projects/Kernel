@@ -107,7 +107,7 @@ def modules_for_vm(module_root: Path, infil_module: Path, kernel_release: str,
 
 
 def make_initramfs(busybox: Path, modules: list[tuple[str, bytes]],
-                   release: str, destination: Path) -> None:
+                   release: str, destination: Path, kernel_sha256: str) -> None:
     module_commands = "\n".join(
         f'/bin/busybox insmod /modules/{name}.ko || fail "MODULE_{name}"'
         for name, _ in modules
@@ -145,10 +145,26 @@ done
 [ "$mounted" = 1 ] || fail "INTRAFS_MOUNT"
 [ "$(/bin/busybox cat /rootfs/System/Boot/source-identity.txt)" = "INFS_BOOT_DISK_EXCLUSIVE" ] || fail "SOURCE_IDENTITY"
 /bin/busybox echo "INFS_NATIVE_MOUNT_READ_PASS" >/dev/console
-/bin/busybox echo "guest-wrote-through-infiltratorfs" >/rootfs/System/Boot/guest-write.txt || fail "WRITE"
-/bin/busybox sync
-[ "$(/bin/busybox cat /rootfs/System/Boot/guest-write.txt)" = "guest-wrote-through-infiltratorfs" ] || fail "VERIFY_WRITE"
-/bin/busybox echo "INFS_NATIVE_WRITE_PASS" >/dev/console
+# Read the *entire* stored kernel and initramfs through the native VFS.
+# The kernel digest is also pinned inside the initramfs, independently of
+# the on-disk manifest. This guards against a stale or incorrect EFI source.
+( cd /rootfs && /bin/busybox sha256sum -c System/Boot/boot-payloads.sha256 ) >/dev/console 2>&1 || fail "BOOT_PAYLOAD_HASH"
+actual_kernel=$(/bin/busybox sha256sum /rootfs/System/Kernel/Images/InfiltratorOS-0.1.0.img)
+[ "${actual_kernel%% *}" = "{kernel_sha256}" ] || fail "STAGED_KERNEL_HASH"
+/bin/busybox echo "INFS_BOOT_PAYLOAD_HASH_PASS" >/dev/console
+if [ -e /rootfs/System/Boot/guest-write.txt ]; then
+  # The VM is freshly booted for a second time: this must be a durable
+  # on-disk write, not the first boot's page cache or mount instance.
+  [ "$(/bin/busybox cat /rootfs/System/Boot/guest-write.txt)" = "guest-wrote-through-infiltratorfs" ] || fail "REBOOT_PERSISTED_CONTENT"
+  /bin/busybox echo "reboot-confirmed" >/rootfs/System/Boot/guest-reboot-write.txt || fail "REBOOT_WRITE"
+  /bin/busybox sync
+  /bin/busybox echo "INFS_REBOOT_PERSISTENCE_PASS" >/dev/console
+else
+  /bin/busybox echo "guest-wrote-through-infiltratorfs" >/rootfs/System/Boot/guest-write.txt || fail "WRITE"
+  /bin/busybox sync
+  [ "$(/bin/busybox cat /rootfs/System/Boot/guest-write.txt)" = "guest-wrote-through-infiltratorfs" ] || fail "VERIFY_WRITE"
+  /bin/busybox echo "INFS_NATIVE_WRITE_PASS" >/dev/console
+fi
 /bin/busybox umount /rootfs || fail "UNMOUNT"
 /bin/busybox echo "INFS_BOOT_KERNEL_FILESYSTEM_PASS" >/dev/console
 /bin/busybox poweroff -f
@@ -166,7 +182,8 @@ done
     destination.write_bytes(gzip.compress(payload, compresslevel=6, mtime=0))
 
 
-def boot_once(args: argparse.Namespace, esp: Path, image: Path, work: Path) -> None:
+def boot_once(args: argparse.Namespace, esp: Path, image: Path, work: Path,
+              phase: int) -> None:
     code = args.ovmf / "OVMF_CODE_4M.fd"
     vars_template = args.ovmf / "OVMF_VARS_4M.fd"
     if not code.is_file():
@@ -174,9 +191,9 @@ def boot_once(args: argparse.Namespace, esp: Path, image: Path, work: Path) -> N
         vars_template = args.ovmf / "OVMF_VARS.fd"
     require(code)
     require(vars_template)
-    vars_copy = work / "OVMF_VARS.fd"
+    vars_copy = work / f"OVMF_VARS-phase{phase}.fd"
     shutil.copyfile(vars_template, vars_copy)
-    serial = work / "serial.log"
+    serial = work / ("serial.log" if phase == 1 else "serial-reboot.log")
     command = [
         "qemu-system-x86_64", "-machine", "q35,accel=tcg",
         "-cpu", "max", "-m", "2048", "-smp", "2",
@@ -187,14 +204,14 @@ def boot_once(args: argparse.Namespace, esp: Path, image: Path, work: Path) -> N
         "-nographic", "-serial", f"file:{serial}",
         "-monitor", "none", "-no-reboot", "-net", "none",
     ]
-    with (work / "qemu-console.log").open("wb") as console:
+    with (work / ("qemu-console.log" if phase == 1 else "qemu-console-reboot.log")).open("wb") as console:
         try:
-            subprocess.run(command, stdout=console, stderr=subprocess.STDOUT,
-                           timeout=args.timeout, check=False)
-        except subprocess.TimeoutExpired:
-            # A completed guest marker is authoritative even if firmware did
-            # not shut down QEMU on the first ACPI poweroff request.
-            pass
+            guest = subprocess.run(command, stdout=console, stderr=subprocess.STDOUT,
+                                   timeout=args.timeout, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"QEMU phase {phase} did not shut down cleanly; evidence: {work}") from exc
+    if guest.returncode != 0:
+        raise RuntimeError(f"QEMU phase {phase} exited with code {guest.returncode}; evidence: {work}")
     log = serial.read_text(errors="replace") if serial.exists() else ""
     print(log[-16000:])
     required = (
@@ -202,15 +219,17 @@ def boot_once(args: argparse.Namespace, esp: Path, image: Path, work: Path) -> N
         "INFS_REAL_KERNEL_PASS",
         "INFS_KERNEL_MODULE_LOAD_PASS",
         "INFS_NATIVE_MOUNT_READ_PASS",
-        "INFS_NATIVE_WRITE_PASS",
+        "INFS_BOOT_PAYLOAD_HASH_PASS",
+        "INFS_NATIVE_WRITE_PASS" if phase == 1 else "INFS_REBOOT_PERSISTENCE_PASS",
         "INFS_BOOT_KERNEL_FILESYSTEM_PASS",
+        "reboot: Power down",
     )
     missing = [value for value in required if value not in log]
     if missing:
-        raise RuntimeError("Three-way Boot/InfiltratorFS/Kernel trial failed; "
+        raise RuntimeError(f"Three-way Boot/InfiltratorFS/Kernel phase {phase} failed; "
                            f"missing {missing}. Evidence: {work}")
-    print("PASS: Boot loaded the real InfiltratorOS kernel and initramfs "
-          "from InfiltratorFS; its matching .ko mounted/read/wrote that volume.")
+    print(f"PASS: phase {phase}: native Kernel and InfiltratorFS boot verified; "
+          "payload integrity and filesystem durability checks completed.")
 
 
 def main() -> None:
@@ -236,7 +255,8 @@ def main() -> None:
         raise ValueError(f"Refusing to overwrite existing test workspace: {work}")
     initrd = work / "initrd.img"
     modules = modules_for_vm(args.module_root, args.module, release, args.kernel_config)
-    make_initramfs(args.busybox, modules, release, initrd)
+    make_initramfs(args.busybox, modules, release, initrd,
+                   hashlib.sha256(args.kernel.read_bytes()).hexdigest())
     image = work / "infiltratorfs.raw"
     esp = work / "esp.img"
     with image.open("wb") as handle:
@@ -253,6 +273,19 @@ def main() -> None:
     marker = work / "source-identity.txt"
     marker.write_text("INFS_BOOT_DISK_EXCLUSIVE\n")
     run(args.fs_tool, image, "put", marker, "/System/Boot/source-identity.txt")
+    # Store the expected full-file digests on the native filesystem, not ESP.
+    boot_manifest = work / "boot-payloads.sha256"
+    manifest_files = (
+        ("System/Kernel/Images/InfiltratorOS-0.1.0.img", args.kernel),
+        ("boot/initrd.img", initrd),
+        ("System/Boot/source-identity.txt", marker),
+    )
+    boot_manifest.write_text("".join(
+        f"{hashlib.sha256(source.read_bytes()).hexdigest()}  {destination}\n"
+        for destination, source in manifest_files
+    ))
+    run(args.fs_tool, image, "put", boot_manifest,
+        "/System/Boot/boot-payloads.sha256")
     run(args.fs_tool, image, "ls", "/System/Kernel/Images")
     run("mkfs.fat", "-F", "32", "-I", "-n", "BOOTESP", esp)
     run("mmd", "-i", esp, "::/EFI", "::/EFI/BOOT", "::/EFI/BOOT/drivers_x64")
@@ -283,9 +316,11 @@ menuentry "InfiltratorFS native kernel trial" {
     manifest.write_text("".join(
         f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p}\n"
         for p in (args.boot, args.driver, args.kernel, args.module,
-                  initrd, config, marker)
+                  initrd, config, marker, boot_manifest)
     ))
-    boot_once(args, esp, image, work)
+    boot_once(args, esp, image, work, phase=1)
+    boot_once(args, esp, image, work, phase=2)
+    print("INFS_TWO_BOOT_DURABILITY_PASS")
 
 
 if __name__ == "__main__":
