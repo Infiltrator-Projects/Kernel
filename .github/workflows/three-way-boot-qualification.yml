@@ -127,6 +127,8 @@ jobs:
       - name: Boot from InfiltratorFS using real Boot EFI and real Kernel
         shell: bash
         timeout-minutes: 35
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/InfiltratorOS/Tests"
