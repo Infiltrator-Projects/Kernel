@@ -26,7 +26,7 @@ jobs:
           bash tests/install-native.sh
           bash tests/module-runtime.sh
           bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
-          python3 -m py_compile tests/infiltratorfs-native-boot.py
+          python3 -m py_compile tests/infiltratorfs-native-boot.py tests/infiltratoros-native-payload.py
           bash scripts/infiltrator/test-infiltratorfs-boot.sh --help | grep -Fq 'Format 0.19 InfiltratorFS'
       - name: Package tiny GitHub source downloader (no kernel compile)
         shell: bash
@@ -80,7 +80,7 @@ jobs:
             gh release upload "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" --clobber
             gh release edit "$RELEASE_TAG" \
               --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
-              --notes "InfiltratorOS Kernel version 0.1.0 (compiled UTS_RELEASE/module ABI: 0.1.0-infiltrator; Debian revision: 0.1.0-4). Imported upstream Linux source base: 7.0.14 (NOT an InfiltratorOS version). Tiny .run pinned to public Git commit $GITHUB_SHA. Both small .runs download that exact source under /Temporary/InfiltratorOS/Kernel, compiles a fresh kernel on the user's machine and verifies native packages before installing under /System/Kernel unless --build-only is selected. Trial .run defaults to --build-only --trial-infiltratorfs --install-deps and uses disposable QEMU images, NOT the host EFI/boot devices. NO source embedded; NO kernel compilation on GitHub. This is not yet a qualified bootable OS; existing host /boot, EFI and NVRAM remain unchanged."
+              --notes "InfiltratorOS Kernel version 0.1.0 (compiled UTS_RELEASE/module ABI: 0.1.0-infiltrator; Debian revision: 0.1.0-4). Imported upstream Linux source base: 7.0.14 (NOT an InfiltratorOS version). Tiny .run pinned to public Git commit $GITHUB_SHA. Both small .runs download that exact source under /Temporary/InfiltratorOS/Kernel, compiles a fresh kernel on the user's machine and verifies native packages before installing under /System/Kernel unless --build-only is selected. Trial .run defaults to --build-only --trial-infiltratorfs --install-deps and uses disposable QEMU images, NOT the host EFI/boot devices. NO source embedded; the lightweight release job does not compile a kernel. Separate GitHub Actions native VM qualification compiled the real 0.1.0-infiltrator kernel, booted it directly from Format 0.19 InfiltratorFS twice, confirmed persistent writes across reboot, SHA256-verified the kernel/initramfs and all 1,257 real native OS resource files. This is not a fully installed desktop OS or physical-machine/Secure Boot qualification; host /boot, EFI and NVRAM remain unchanged."
           else
             gh release create "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" \
               --target "$GITHUB_SHA" --prerelease \

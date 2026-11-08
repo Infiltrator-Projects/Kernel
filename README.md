@@ -68,8 +68,9 @@ source commit, compiles with the **local** kernel toolchain in
 `/Temporary/InfiltratorOS/Kernel/Build/`, creates and verifies native
 Debian packages under `/Temporary/InfiltratorOS/Kernel/Packages/`,
 and installs native files only under `/System/Kernel/`. The installer
-automatically creates missing temporary folders. GitHub only publishes
-the downloader; it does not compile or test the kernel for the user.
+automatically creates missing temporary folders. The lightweight release workflow only publishes the downloader; a separate
+GitHub Actions integration workflow compiles the actual kernel and boots it
+under QEMU/OVMF before claiming a verified native boot-chain result.
 
 **Kernel identity:** InfiltratorOS Kernel **0.1.0** has the native
 kernel release and compiled module ABI **`0.1.0-infiltrator`**,
@@ -90,13 +91,14 @@ The normal GitHub `.run` automatically preserves and replaces existing
 same-version 0.1.0 native files when present, without requiring command-line
 options; the backups are retained under `/Temporary/InfiltratorOS/Kernel/Backups/`.
 
-**Verification status:** The version correction is committed in Git,
-but a complete fresh kernel compile **using this revised code** has
-not yet been demonstrated on a physical machine. The earlier QEMU
-boot milestone is preserved as historical evidence only. The public
+**Verification status:** A clean GitHub-hosted compile and real QEMU/OVMF
+InfiltratorFS-to-Kernel boot have now passed using the native
+`0.1.0-infiltrator` ABI. Physical hardware boot qualification is separate;
+a VM success does not establish a deployed desktop operating system. The public
 `.run` may also use `--build-only` to compile and verify without
-installing. Actual boot activation, root-filesystem access and native
-module loading are not yet qualified. Existing host `/boot`, Linux
+installing. Production boot activation and complete installed root userspace are not yet
+qualified; virtual-machine boot, native module loading and live InfiltratorFS
+mount/read/write are qualified in the pinned two-boot trial. Existing host `/boot`, Linux
 modules, EFI and NVRAM are not modified by the native installer.
 Existing versioned native files are not silently overwritten. To repair a previously installed same-version 0.1.0 kernel with the inherited Linux ABI, run the current small `.run` with `--replace-existing`; the installer preserves the six previous versioned native kernel paths under `/Temporary/InfiltratorOS/Kernel/Backups/` and leaves independent filesystem providers untouched. The repair flag is explicit and not accepted together with `--build-only`.
 
@@ -179,8 +181,10 @@ Trial logs/images remain under `/Temporary/InfiltratorOS/Kernel/Tests`.
 The ordinary `.run` path still does not modify Mint boot files or
 activate the new kernel. GitHub's lightweight `.run` release job checks
 trial script syntax and packaging; it does not run the heavyweight VM.
-The first real QEMU trial and physical hardware boot are separate
-qualifications and must not be reported as PASS before guest evidence exists.
+The [initial real VM trial](https://github.com/Infiltrator-Projects/Kernel/actions/runs/42431603931)
+and the [expanded two-boot qualification](https://github.com/Infiltrator-Projects/Kernel/actions/runs/42434204081)
+have both passed with retained guest serial logs. Physical firmware, Secure
+Boot and an installed native-root desktop remain separate qualifications.
 
 ### Direct GitHub trial launcher
 
@@ -192,3 +196,24 @@ runs this three-way VM trial directly when launched. The trial file has
 it compiles but **does not install or activate a host kernel**. It may
 ask for sudo solely to install QEMU, EFI and filesystem build packages.
 It never touches a physical drive or the host ESP.
+
+## Verified two-boot native InfiltratorFS milestone — 8 November 2026
+
+The [completed GitHub Actions qualification](https://github.com/Infiltrator-Projects/Kernel/actions/runs/42434204081)
+compiled InfiltratorOS Kernel `0.1.0-infiltrator` and exercised the real
+Boot `0.1.39` UEFI application and the source-owned Format 0.19
+InfiltratorFS EFI reader. Boot and its filesystem driver lived on the
+FAT32 ESP; both kernel and initramfs lived exclusively on InfiltratorFS.
+The guest loaded the matching native `infiltratorfs.ko`, verified full-file
+kernel/initramfs SHA-256 digests, mounted/read/wrote InfiltratorFS, and
+shut down cleanly. A **second entirely separate QEMU boot** then mounted
+the same disk, verified that the first boot's written file persisted and
+rechecked the boot payloads and 1,257 canonical OS resources (23 fonts,
+1,233 icons and one image) against source digests. Both serial logs and the
+source inventory are attached as run evidence.
+
+This is a tested native filesystem and kernel handoff in virtual firmware,
+**not** a production installer, real machine EFI deployment, Secure Boot
+qualification or a complete InfiltratorOS desktop userspace. Trial inputs
+remain pinned and all test disks, firmware variable stores and generated
+files are disposable.
