@@ -67,7 +67,7 @@ fi
 trial=$(mktemp -d "$workspace/Boot-InfiltratorFS-Kernel.XXXXXXXX") || fail 'Cannot allocate trial workspace'
 log "Preserved evidence: $trial"
 fs="$trial/InfiltratorFS"
-fs_sha=38b8937e627bbe25e3c9094db7c41db41f84616e
+fs_sha=21af8c00c57fc5225146f608c8533f49767d32fe
 os_sha=c1c928e309511796387a70fb81b944bfef5f26b3
 git init -q -b main "$fs"
 git -C "$fs" remote add origin https://github.com/Infiltrator-Projects/InfiltratorFS.git
