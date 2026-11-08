@@ -1,21 +1,60 @@
 name: Publish small InfiltratorOS Kernel downloader .run
 
+# The release must correspond to the exact source of BOTH successful real
+# VM qualifications, not merely to a successful lightweight packaging job.
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Three-way Boot + InfiltratorFS + Kernel VM qualification"
+      - "Qualify independent EXT2 against InfiltratorOS Kernel"
+    types: [completed]
 
 permissions:
   contents: write
+  actions: read
+
+concurrency:
+  group: native-kernel-verified-release-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
 
 jobs:
   publish-run:
-    # GitHub publishes the downloader. The kernel compiles on the user's machine.
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release-run]')
+    if: github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     steps:
+      - name: Gate release on both exact-source successful QEMU qualifications
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUALIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$current" != "$QUALIFIED_SHA" ]]; then
+            echo "Skipping superseded kernel revision $QUALIFIED_SHA (main is $current)"
+            exit 0
+          fi
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$QUALIFIED_SHA&per_page=100")"
+          for workflow in             'Three-way Boot + InfiltratorFS + Kernel VM qualification'             'Qualify independent EXT2 against InfiltratorOS Kernel'; do
+            state="$(jq -r --arg name "$workflow" '
+              [.workflow_runs[] | select(.name == $name)]
+              | sort_by(.created_at, .id) | last
+              | [(.status // ""), (.conclusion // "")] | @tsv' <<<"$runs")"
+            if [[ "$state" != "$(printf 'completed\tsuccess')" ]]; then
+              echo "Release gate waiting: $workflow is $state"
+              exit 0
+            fi
+          done
+          echo "READY=true" >> "$GITHUB_ENV"
+          echo "QUALIFIED_SHA=$QUALIFIED_SHA" >> "$GITHUB_ENV"
+          echo "Both native QEMU qualifications passed for $QUALIFIED_SHA"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
+        if: env.READY == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
       - name: Validate native packaging syntax and generated Debian identity
+        if: env.READY == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -29,6 +68,7 @@ jobs:
           python3 -m py_compile tests/infiltratorfs-native-boot.py tests/infiltratoros-native-payload.py
           bash scripts/infiltrator/test-infiltratorfs-boot.sh --help | grep -Fq 'Format 0.19 InfiltratorFS'
       - name: Package tiny GitHub source downloader (no kernel compile)
+        if: env.READY == 'true'
         shell: bash
         env:
           INFILTRATOROS_TEMP_ROOT: ${{ runner.temp }}/InfiltratorOS
@@ -43,14 +83,14 @@ jobs:
           test -s "$installer" && test -s "$trial"
           test "$(stat -c %s "$trial")" -lt 65536
           bash -n "$trial"
-          grep -Fxq "expected_commit=$GITHUB_SHA" "$trial"
+          grep -Fxq "expected_commit=$QUALIFIED_SHA" "$trial"
           grep -Fxq 'build_only=1' "$trial"
           grep -Fxq 'trial_infiltratorfs=1' "$trial"
           grep -Fxq 'install_deps=1' "$trial"
           # Prevent accidental return to 161 MB embedded-source design.
           test "$(stat -c %s "$installer")" -lt 65536
           bash -n "$installer"
-          grep -Fxq "expected_commit=$GITHUB_SHA" "$installer"
+          grep -Fxq "expected_commit=$QUALIFIED_SHA" "$installer"
           grep -Fq '/Temporary/InfiltratorOS' "$installer"
           grep -Fq 'Existing native Kernel' "$installer"
           grep -Fq 'fetch --no-tags --depth 1 origin "$expected_commit"' "$installer"
@@ -69,31 +109,48 @@ jobs:
           echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
           echo "SIZE=$(stat -c %s "$installer")" >> "$GITHUB_ENV"
           echo "PASS: tiny downloader, no kernel sources bundled or compiled on GitHub"
-      - name: Replace oversized public release asset
+      - name: Publish exact qualified installer without changing prior releases
+        if: env.READY == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            # --clobber deletes/replaces old large release asset by name.
-            gh release upload "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" --clobber
-            gh release edit "$RELEASE_TAG" \
-              --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
-              --notes "InfiltratorOS Kernel version 0.1.0 (compiled UTS_RELEASE/module ABI: 0.1.0-infiltrator; Debian revision: 0.1.0-4). Imported upstream Linux source base: 7.0.14 (NOT an InfiltratorOS version). Tiny .run pinned to public Git commit $GITHUB_SHA. Both small .runs download that exact source under /Temporary/InfiltratorOS/Kernel, compiles a fresh kernel on the user's machine and verifies native packages before installing under /System/Kernel unless --build-only is selected. Trial .run defaults to --build-only --trial-infiltratorfs --install-deps and uses disposable QEMU images, NOT the host EFI/boot devices. NO source embedded; the lightweight release job does not compile a kernel. Separate GitHub Actions native VM qualification compiled the real 0.1.0-infiltrator kernel, booted it directly from Format 0.19 InfiltratorFS twice, confirmed persistent writes across reboot, SHA256-verified the kernel/initramfs and all 1,257 real native OS resource files. This is not a fully installed desktop OS or physical-machine/Secure Boot qualification; host /boot, EFI and NVRAM remain unchanged."
-          else
-            gh release create "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" \
-              --target "$GITHUB_SHA" --prerelease \
-              --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
-              --notes "InfiltratorOS Kernel 0.1.0, UTS_RELEASE/module ABI 0.1.0-infiltrator; upstream Linux source 7.0.14. Tiny .run downloads pinned GitHub source, compiles locally under /Temporary/InfiltratorOS/Kernel and installs native files under /System/Kernel. New native Debian revision 0.1.0-4. No kernel compilation on GitHub; early development build."
+          test "$(git rev-parse HEAD)" = "$QUALIFIED_SHA"
+          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$current" != "$QUALIFIED_SHA" ]]; then
+            echo "Kernel main changed after qualification; publication skipped"
+            exit 0
           fi
-          # Verify GitHub publishes the normal installer and the separate small test .run.
-          gh release view "$RELEASE_TAG" --json assets \
-            --jq '.assets[] | select(.name | endswith(".run")) | [.name, .size] | @tsv' \
-            > "$RUNNER_TEMP/published-run.txt"
-          test "$(wc -l < "$RUNNER_TEMP/published-run.txt")" -eq 2
-          grep -Fxq "$(basename "$RUN_PATH")	$SIZE" "$RUNNER_TEMP/published-run.txt"
-          grep -Fxq "$(basename "$TRIAL_PATH")	$TRIAL_SIZE" "$RUNNER_TEMP/published-run.txt"
-          test "$SIZE" -lt 65536
-          test "$TRIAL_SIZE" -lt 65536
-          echo "PASS: two GitHub .runs: normal native installer and independent Boot/InfiltratorFS/Kernel VM trial"
+          version="$(tr -d '\r\n' < VERSION)"
+          test "$RELEASE_TAG" = "v$version"
+          out="$(dirname "$RUN_PATH")"
+          (cd "$out" && sha256sum -c SHA256SUMS.txt)
+          if gh release view "$RELEASE_TAG" --json tagName >/dev/null 2>&1; then
+            ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+            target="$(jq -r '.object.sha' <<<"$ref")"
+            kind="$(jq -r '.object.type' <<<"$ref")"
+            if [[ "$kind" == tag ]]; then
+              target="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$target" --jq '.object.sha')"
+            fi
+            test "$target" = "$QUALIFIED_SHA" || {
+              echo "Refusing to replace historical release $RELEASE_TAG at $target" >&2
+              exit 1
+            }
+          else
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+              echo "Release tag already exists without an immutable release; refusing" >&2
+              exit 1
+            fi
+            gh release create "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" \
+              --target "$QUALIFIED_SHA" --prerelease \
+              --title "InfiltratorOS Kernel $version — qualified native downloader" \
+              --notes "Kernel and module ABI $version (uname -r, no additional suffix); upstream Linux source 7.0.14. Both QEMU/OVMF native Boot → InfiltratorFS → Kernel and independent EXT2 two-boot qualifications passed for this exact Kernel commit. The two small .run files fetch pinned GitHub source, compile locally, and keep the normal Mint /boot, EFI and NVRAM intact. Physical hardware remains unqualified."
+          fi
+          downloaded="$RUNNER_TEMP/Kernel-published-release"
+          mkdir -p "$downloaded"
+          gh release download "$RELEASE_TAG" --dir "$downloaded"
+          diff -qr "$out" "$downloaded"
+          (cd "$downloaded" && sha256sum --quiet -c SHA256SUMS.txt)
+          test "$(find "$downloaded" -maxdepth 1 -type f | wc -l)" = 3
+          echo "PASS: immutable Kernel $version release at verified source $QUALIFIED_SHA"
