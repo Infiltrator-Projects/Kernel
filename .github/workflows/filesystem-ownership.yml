@@ -6,6 +6,10 @@ on:
     paths:
       - 'scripts/infiltrator/audit-filesystem-modules.py'
       - 'tests/filesystem-module-ownership.py'
+      - 'scripts/infiltrator/prune-external-filesystems.py'
+      - 'scripts/build-native.sh'
+      - 'tests/nonboot-filesystem-build-profile.py'
+      - '.github/workflows/three-way-boot-qualification.yml'
       - '.github/workflows/filesystem-ownership.yml'
   workflow_dispatch:
 
@@ -22,6 +26,7 @@ jobs:
       - name: Compile and execute ownership regression checks
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/infiltrator/audit-filesystem-modules.py tests/filesystem-module-ownership.py
+          python3 -m py_compile scripts/infiltrator/audit-filesystem-modules.py tests/filesystem-module-ownership.py scripts/infiltrator/prune-external-filesystems.py tests/nonboot-filesystem-build-profile.py
           python3 tests/filesystem-module-ownership.py
+          python3 tests/nonboot-filesystem-build-profile.py
           test -z "$(find . -maxdepth 1 -name '*.ko' -print)"

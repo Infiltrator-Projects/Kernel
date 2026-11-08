@@ -48,7 +48,7 @@ if (( ! skip_deps )); then
   sudo apt-get install -y --no-install-recommends build-essential bc bison flex fakeroot dwarves libelf-dev libssl-dev rsync dpkg-dev
   sudo apt-get build-dep -y "$pkg"
 fi
-for tool in make gcc dpkg-deb sha256sum; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
+for tool in make gcc dpkg-deb sha256sum python3; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
 if [[ -n "$jobs" ]]; then
   [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || fail "Invalid --jobs count"
 else
@@ -191,8 +191,15 @@ bash "$root/scripts/infiltrator/prepare-certificates.sh" "$source_dir" "$obj"
 # Compile the InfiltratorOS module helper path into the native kernel.
 native_modprobe="/System/Kernel/Runtime/InfiltratorOS-$product_version/modprobe"
 "$source_dir/scripts/config" --file "$obj/.config" --set-str MODPROBE_PATH "$native_modprobe"
-log "Configuring with the running distro defaults"
+# Distro configs enable filesystem VFS drivers which are now independently
+# owned in Filesystem-* repositories.  Retain FAT/EXT and shared VFS, but
+# exclude the non-boot duplicates from both vmlinux and built .ko outputs.
+python3 "$root/scripts/infiltrator/prune-external-filesystems.py" apply "$obj/.config"
+log "Configuring host baseline with independently owned non-boot filesystems excluded"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
+# Kconfig can re-enable an option through selects/defaults.  Fail closed if
+# any retired driver survives effective olddefconfig reconciliation.
+python3 "$root/scripts/infiltrator/prune-external-filesystems.py" check "$obj/.config"
 # A fresh kernel make is required at every stage: the outer `make build-only`
 # exports sub_make_done=1, which suppresses Kbuild's first-pass O= parsing.
 # The run-kbuild helper clears this inherited marker so our object directory

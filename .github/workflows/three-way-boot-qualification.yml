@@ -70,7 +70,10 @@ jobs:
             --set-str SYSTEM_REVOCATION_KEYS '' \
             --set-str MODPROBE_PATH '/System/Kernel/Runtime/InfiltratorOS-0.1.1/modprobe' \
             -d DEBUG_INFO
+          # Same filesystem exclusions as the native Mint/Debian builder.
+          python3 scripts/infiltrator/prune-external-filesystems.py apply "$obj/.config"
           make O="$obj" KERNELRELEASE=0.1.1 olddefconfig
+          python3 scripts/infiltrator/prune-external-filesystems.py check "$obj/.config"
           make O="$obj" KERNELRELEASE=0.1.1 prepare
           grep -Fqx 'CONFIG_EFI_STUB=y' "$obj/.config"
           grep -Fqx 'CONFIG_VIRTIO_PCI=y' "$obj/.config"
