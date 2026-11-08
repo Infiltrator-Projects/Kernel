@@ -67,6 +67,7 @@ jobs:
             -e MODULES -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE -e RD_GZIP \
             -d EXT2_FS -d EXT4_USE_FOR_EXT2 \
+            -d 9P_FS -d NET_9P \
             -d MODULE_SIG -d DEBUG_INFO \
             --set-str SYSTEM_TRUSTED_KEYS '' \
             --set-str SYSTEM_REVOCATION_KEYS ''
