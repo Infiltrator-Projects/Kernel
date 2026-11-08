@@ -8,9 +8,10 @@ log() { printf 'InfiltratorOS three-way trial: %s\n' "$*" >&2; }
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 version=$(tr -d '\r\n' < "$root/VERSION")
 [[ "$version" == 0.1.0 ]] || fail 'Only InfiltratorOS Kernel 0.1.0 is qualified'
-source= objects= stage= workspace= jobs=2
+source= objects= stage= workspace= jobs=2 install_deps=0
 while (( $# )); do
   case "$1" in
+    --install-deps) install_deps=1 ;;
     --source|--objects|--stage|--workspace|--jobs)
       key=$1; shift; (( $# )) || fail "Missing value for $key"
       case "$key" in
@@ -18,7 +19,7 @@ while (( $# )); do
         --stage) stage=$1 ;; --workspace) workspace=$1 ;; --jobs) jobs=$1 ;;
       esac ;;
     --help|-h)
-      echo 'Usage: test-infiltratorfs-boot.sh --source KERNEL-SOURCE --objects COMPILED-OBJECTS --stage NATIVE-STAGE --workspace DIRECTORY [--jobs N]'
+      echo 'Usage: test-infiltratorfs-boot.sh --source KERNEL-SOURCE --objects COMPILED-OBJECTS --stage NATIVE-STAGE --workspace DIRECTORY [--jobs N] [--install-deps]'
       echo 'Real QEMU/OVMF: Boot loads Kernel and initramfs from Format 0.19 InfiltratorFS; guest mounts/reads/writes that filesystem with an ABI-matching native .ko.'
       echo 'Uses disposable regular-file images only; no host boot or drive changes.'
       exit 0 ;;
@@ -36,6 +37,23 @@ kernel="$stage/System/Kernel/Images/InfiltratorOS-$version.img"
 config="$stage/System/Kernel/Images/InfiltratorOS-$version.config"
 module_root="$stage/System/Kernel/Modules/InfiltratorOS-$version/kernel"
 [[ -s "$kernel" && -s "$config" && -d "$module_root" ]] || fail 'Missing staged Kernel image/config/module tree'
+if (( install_deps )); then
+  # Installation is explicit via the dedicated trial .run, not a side effect
+  # of the normal kernel installer. No disk/boot/EFI packages are configured.
+  command -v apt-get >/dev/null || fail 'Automatic trial prerequisites require apt-get'
+  apt=( )
+  if (( EUID != 0 )); then
+    command -v sudo >/dev/null || fail 'sudo is required for trial dependencies'
+    apt=(sudo)
+  fi
+  "${apt[@]}" apt-get update ||
+    fail 'Cannot refresh trial build dependency metadata'
+  "${apt[@]}" apt-get install -y --no-install-recommends \
+    build-essential cmake git wget python3 file busybox-static \
+    gnu-efi ovmf qemu-system-x86 qemu-utils dosfstools mtools zstd \
+    libssl-dev pkg-config liblz4-dev ||
+    fail 'Cannot install QEMU/UEFI/filesystem trial prerequisites'
+fi
 for dep in git cmake make gcc g++ wget dpkg-deb sha256sum python3 \
   qemu-system-x86_64 mkfs.fat mcopy mmd modinfo zstd; do
   command -v "$dep" >/dev/null || fail "Missing trial prerequisite: $dep"

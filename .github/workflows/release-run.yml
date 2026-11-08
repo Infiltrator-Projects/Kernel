@@ -39,7 +39,14 @@ jobs:
           version=$(tr -d '\r\n' < VERSION)
           out="$INFILTRATOROS_TEMP_ROOT/Kernel/Packages"
           installer="$out/InfiltratorOS-Kernel-$version-amd64.run"
-          test -s "$installer"
+          trial="$out/InfiltratorOS-Kernel-$version-InfiltratorFS-Trial-amd64.run"
+          test -s "$installer" && test -s "$trial"
+          test "$(stat -c %s "$trial")" -lt 65536
+          bash -n "$trial"
+          grep -Fxq "expected_commit=$GITHUB_SHA" "$trial"
+          grep -Fxq 'build_only=1' "$trial"
+          grep -Fxq 'trial_infiltratorfs=1' "$trial"
+          grep -Fxq 'install_deps=1' "$trial"
           # Prevent accidental return to 161 MB embedded-source design.
           test "$(stat -c %s "$installer")" -lt 65536
           bash -n "$installer"
@@ -53,9 +60,11 @@ jobs:
             echo 'ERROR: old embedded-source format detected'
             exit 1
           fi
-          (cd "$out" && sha256sum "InfiltratorOS-Kernel-$version-amd64.run" > SHA256SUMS.txt)
+          (cd "$out" && sha256sum "InfiltratorOS-Kernel-$version-amd64.run" "InfiltratorOS-Kernel-$version-InfiltratorFS-Trial-amd64.run" > SHA256SUMS.txt)
           (cd "$out" && sha256sum --quiet -c SHA256SUMS.txt)
           echo "RUN_PATH=$installer" >> "$GITHUB_ENV"
+          echo "TRIAL_PATH=$trial" >> "$GITHUB_ENV"
+          echo "TRIAL_SIZE=$(stat -c %s "$trial")" >> "$GITHUB_ENV"
           echo "SHA_PATH=$out/SHA256SUMS.txt" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
           echo "SIZE=$(stat -c %s "$installer")" >> "$GITHUB_ENV"
@@ -68,22 +77,23 @@ jobs:
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             # --clobber deletes/replaces old large release asset by name.
-            gh release upload "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" --clobber
+            gh release upload "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" --clobber
             gh release edit "$RELEASE_TAG" \
               --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
-              --notes "InfiltratorOS Kernel version 0.1.0 (compiled UTS_RELEASE/module ABI: 0.1.0-infiltrator; Debian revision: 0.1.0-4). Imported upstream Linux source base: 7.0.14 (NOT an InfiltratorOS version). Tiny .run pinned to public Git commit $GITHUB_SHA. Running it downloads that exact source under /Temporary/InfiltratorOS/Kernel, compiles a fresh kernel on the user's machine and verifies native packages before installing under /System/Kernel unless --build-only is selected. NO source embedded; NO kernel compilation on GitHub. This is not yet a qualified bootable OS; existing host /boot, EFI and NVRAM remain unchanged."
+              --notes "InfiltratorOS Kernel version 0.1.0 (compiled UTS_RELEASE/module ABI: 0.1.0-infiltrator; Debian revision: 0.1.0-4). Imported upstream Linux source base: 7.0.14 (NOT an InfiltratorOS version). Tiny .run pinned to public Git commit $GITHUB_SHA. Both small .runs download that exact source under /Temporary/InfiltratorOS/Kernel, compiles a fresh kernel on the user's machine and verifies native packages before installing under /System/Kernel unless --build-only is selected. Trial .run defaults to --build-only --trial-infiltratorfs --install-deps and uses disposable QEMU images, NOT the host EFI/boot devices. NO source embedded; NO kernel compilation on GitHub. This is not yet a qualified bootable OS; existing host /boot, EFI and NVRAM remain unchanged."
           else
-            gh release create "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" \
+            gh release create "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" \
               --target "$GITHUB_SHA" --prerelease \
               --title "InfiltratorOS Kernel $RELEASE_TAG — lightweight GitHub downloader" \
               --notes "InfiltratorOS Kernel 0.1.0, UTS_RELEASE/module ABI 0.1.0-infiltrator; upstream Linux source 7.0.14. Tiny .run downloads pinned GitHub source, compiles locally under /Temporary/InfiltratorOS/Kernel and installs native files under /System/Kernel. New native Debian revision 0.1.0-4. No kernel compilation on GitHub; early development build."
           fi
-          # Verify GitHub's public release now has exactly one small .run.
+          # Verify GitHub publishes the normal installer and the separate small test .run.
           gh release view "$RELEASE_TAG" --json assets \
             --jq '.assets[] | select(.name | endswith(".run")) | [.name, .size] | @tsv' \
             > "$RUNNER_TEMP/published-run.txt"
-          test "$(wc -l < "$RUNNER_TEMP/published-run.txt")" -eq 1
-          actual_size=$(awk '{print $2}' "$RUNNER_TEMP/published-run.txt")
-          test "$actual_size" -eq "$SIZE"
-          test "$actual_size" -lt 65536
-          echo "PASS: public GitHub release replaced oversized source-bearing .run with $actual_size-byte downloader"
+          test "$(wc -l < "$RUNNER_TEMP/published-run.txt")" -eq 2
+          grep -Fxq "$(basename "$RUN_PATH")	$SIZE" "$RUNNER_TEMP/published-run.txt"
+          grep -Fxq "$(basename "$TRIAL_PATH")	$TRIAL_SIZE" "$RUNNER_TEMP/published-run.txt"
+          test "$SIZE" -lt 65536
+          test "$TRIAL_SIZE" -lt 65536
+          echo "PASS: two GitHub .runs: normal native installer and independent Boot/InfiltratorFS/Kernel VM trial"

@@ -166,10 +166,11 @@ if (( trial_infiltratorfs )); then
   mkdir -p "$workspace/Tests" ||
     fail 'Cannot create isolated three-way trial evidence directory'
   printf 'Running actual Boot -> InfiltratorFS -> InfiltratorOS Kernel trial in QEMU\n'
-  ( cd "$source_dir" && bash scripts/infiltrator/test-infiltratorfs-boot.sh \
-    --source "$source_dir" --objects "$obj" --stage "$stage" \
-    --workspace "$workspace/Tests" \
-    ${jobs:+--jobs "$jobs"} ) 2>&1 | tee -a "$logfile" ||
+  trial_args=(--source "$source_dir" --objects "$obj" --stage "$stage" --workspace "$workspace/Tests")
+  if [[ -n "$jobs" ]]; then trial_args+=(--jobs "$jobs"); fi
+  if (( install_deps )); then trial_args+=(--install-deps); fi
+  ( cd "$source_dir" && bash scripts/infiltrator/test-infiltratorfs-boot.sh
+    "${trial_args[@]}" ) 2>&1 | tee -a "$logfile" ||
     fail "Three-project QEMU trial failed; see logs under $workspace/Tests"
 fi
 if (( ! build_only )); then
@@ -201,6 +202,31 @@ if grep -Fq '__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__' "$tmp"; then
 fi
 chmod 755 "$tmp"
 mv -- "$tmp" "$outfile"
+# A second, equally lightweight asset is deliberately a TEST, never an install.
+# Clicking this .run starts the full image-only three-way QEMU qualification
+# with all flags preselected. The normal product .run is unchanged.
+trialfile="$out/InfiltratorOS-Kernel-$version-InfiltratorFS-Trial-amd64.run"
+[[ ! -e "$trialfile" && ! -L "$trialfile" ]] ||
+  fail "Existing trial .run preserved: $trialfile"
+trialtmp=$(mktemp "$out/.InfiltratorFS-Trial-$version.XXXXXXXX")
+trap 'rm -f -- "$trialtmp"' EXIT
+cp -- "$outfile" "$trialtmp"
+sed -i \
+  -e 's/^build_only=0$/build_only=1/' \
+  -e 's/^install_deps=0$/install_deps=1/' \
+  -e 's/^trial_infiltratorfs=0$/trial_infiltratorfs=1/' \
+  "$trialtmp"
+grep -Fxq 'build_only=1' "$trialtmp" ||
+  fail 'Trial launcher must not install or activate host kernel'
+grep -Fxq 'install_deps=1' "$trialtmp" ||
+  fail 'Trial launcher must include its QEMU/EFI dependencies'
+grep -Fxq 'trial_infiltratorfs=1' "$trialtmp" ||
+  fail 'Trial launcher must start InfiltratorFS boot test automatically'
+grep -Fxq "expected_commit=$commit" "$trialtmp" ||
+  fail 'Trial launcher source revision is not pinned'
+chmod 755 "$trialtmp"
+mv -- "$trialtmp" "$trialfile"
 trap - EXIT
-printf 'InfiltratorOS Kernel release: lightweight downloader: %s\n' "$outfile"
-printf 'Source is fetched at runtime from commit %s\n' "$commit"
+printf 'InfiltratorOS Kernel release: native installer .run: %s\n' "$outfile"
+printf 'InfiltratorOS Kernel release: isolated three-way trial .run: %s\n' "$trialfile"
+printf 'Both download source pinned to commit %s\n' "$commit"

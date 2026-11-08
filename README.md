@@ -181,3 +181,14 @@ activate the new kernel. GitHub's lightweight `.run` release job checks
 trial script syntax and packaging; it does not run the heavyweight VM.
 The first real QEMU trial and physical hardware boot are separate
 qualifications and must not be reported as PASS before guest evidence exists.
+
+### Direct GitHub trial launcher
+
+The v0.1.0 release publishes **two small source-downloader .runs**:
+`InfiltratorOS-Kernel-0.1.0-amd64.run` remains the regular installation
+file, while `InfiltratorOS-Kernel-0.1.0-InfiltratorFS-Trial-amd64.run`
+runs this three-way VM trial directly when launched. The trial file has
+`--build-only`, `--install-deps` and `--trial-infiltratorfs` preselected:
+it compiles but **does not install or activate a host kernel**. It may
+ask for sudo solely to install QEMU, EFI and filesystem build packages.
+It never touches a physical drive or the host ESP.
