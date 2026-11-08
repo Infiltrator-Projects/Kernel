@@ -7,11 +7,6 @@ name: Three-way Boot + InfiltratorFS + Kernel VM qualification
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/three-way-boot-qualification.yml'
-      - 'scripts/infiltrator/test-infiltratorfs-boot.sh'
-      - 'tests/infiltratorfs-native-boot.py'
-      - 'tests/infiltratoros-native-payload.py'
   workflow_dispatch:
 
 permissions:
@@ -28,7 +23,7 @@ jobs:
     timeout-minutes: 110
     steps:
       - name: Checkout full InfiltratorOS kernel sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
         with:
           fetch-depth: 1
 
@@ -36,6 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 tests/verify-ci-contracts.py
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
@@ -151,7 +147,7 @@ jobs:
 
       - name: Preserve kernel, UEFI, guest serial and filesystem integrity evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ThreeWay-Boot-InfiltratorFS-Kernel-${{ github.sha }}
           path: |
