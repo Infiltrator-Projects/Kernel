@@ -257,3 +257,23 @@ records in place. The locally built product and user-facing file names use
 InfiltratorOS. Actual internal renaming is an incremental engineering task
 requiring driver, module, binary interface and boot verification, not a
 global string substitution.
+
+## Boot from an InfiltratorFS kernel source volume
+
+The first Boot + Kernel + InfiltratorFS integration test is now
+`tests/infiltratorfs-native-boot.py`, orchestrated by
+`scripts/infiltrator/test-infiltratorfs-boot.sh` and exposed via the
+GitHub `.run` option `--trial-infiltratorfs`.
+An ESP containing **no kernel and no initramfs** holds only Boot and the
+InfiltratorFS-owned `drivers_x64/InfiltratorFS_x64.efi` reader.
+Both the real kernel image and initramfs live in the separate
+Format 0.19 InfiltratorFS disk image. Successful guest evidence must
+prove UEFI access, native `0.1.0-infiltrator` execution and a mounted
+read/write operation through the matched `infiltratorfs.ko`.
+
+This is an explicitly isolated QEMU/OVMF test using only image files:
+no host ESP/EFI/NVRAM changes, physical formatting or host module
+insertion. The existing FAT16 handoff test is a separate compatibility
+test and is **not accepted as evidence** for this InfiltratorFS-source
+requirement. Code and static checks alone do not establish an actual
+three-way boot result.

@@ -34,7 +34,7 @@ fail() { printf 'InfiltratorOS Kernel .run: ERROR: %s\n' "$*" >&2; exit 1; }
 repo='https://github.com/Infiltrator-Projects/Kernel.git'
 expected_commit=__PINNED_COMMIT__
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
-  echo 'Usage: ./InfiltratorOS-Kernel-0.1.0-amd64.run [--build-only] [--jobs N] [--install-deps] [--replace-existing]'
+  echo 'Usage: ./InfiltratorOS-Kernel-0.1.0-amd64.run [--build-only] [--jobs N] [--install-deps] [--replace-existing] [--trial-infiltratorfs]'
   echo 'Downloads the exact release source from GitHub into /Temporary/InfiltratorOS/Kernel.'
   echo 'Freshly compiles on THIS machine, verifies actual native Debian package paths,'
   echo 'and installs files under /System/Kernel (not under Mint /boot).'
@@ -42,17 +42,21 @@ if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
   echo '--build-only: download, compile and verify without native file installation.'
   echo '--install-deps: allow APT installation of missing build prerequisites.'
   echo '--replace-existing: archive and replace previously installed same-version native Kernel files.'
+  echo '--trial-infiltratorfs: run isolated Boot -> InfiltratorFS -> real Kernel -> native filesystem mount/read/write QEMU qualification.'
+  echo 'Trial needs QEMU, OVMF, gnu-efi, mtools, dosfstools, busybox-static, zstd and filesystem build dependencies.'
   exit 0
 fi
 build_only=0
 install_deps=0
 replace_existing=0
+trial_infiltratorfs=0
 jobs=
 while (( $# )); do
   case "$1" in
     --build-only) build_only=1 ;;
     --install-deps) install_deps=1 ;;
     --replace-existing) replace_existing=1 ;;
+    --trial-infiltratorfs) trial_infiltratorfs=1 ;;
     --jobs)
       shift; (( $# )) || fail '--jobs requires a number'
       [[ "$1" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid --jobs value'
@@ -158,6 +162,16 @@ if [[ -n "$jobs" ]]; then args+=(--jobs "$jobs"); fi
   fail "Native staging failed; see $logfile"
 ( cd "$stage" && sha256sum --quiet -c SHA256SUMS.txt ) ||
   fail "Native staged output checksum failure; see $logfile"
+if (( trial_infiltratorfs )); then
+  mkdir -p "$workspace/Tests" ||
+    fail 'Cannot create isolated three-way trial evidence directory'
+  printf 'Running actual Boot -> InfiltratorFS -> InfiltratorOS Kernel trial in QEMU\n'
+  ( cd "$source_dir" && bash scripts/infiltrator/test-infiltratorfs-boot.sh \
+    --source "$source_dir" --objects "$obj" --stage "$stage" \
+    --workspace "$workspace/Tests" \
+    ${jobs:+--jobs "$jobs"} ) 2>&1 | tee -a "$logfile" ||
+    fail "Three-project QEMU trial failed; see logs under $workspace/Tests"
+fi
 if (( ! build_only )); then
   install_args=(--packages "$packages")
   if (( replace_existing )); then

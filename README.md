@@ -153,3 +153,31 @@ root is available can invoke the compiled-in helper automatically. Early
 initramfs requirements, a verified native root, real module insertion and the
 unified `/System/Filesystems/*.so` kernel bridge remain separately unqualified.
 Ordinary Linux cannot load a userspace `.so` as a `.ko` simply by redirecting paths.
+
+## Three-component Boot → InfiltratorFS → Kernel qualification
+
+The GitHub kernel downloader now supports `--trial-infiltratorfs` as an
+opt-in isolated QEMU/OVMF trial after native kernel compilation. This
+test deliberately **does not place a kernel or initramfs on FAT32**. Only
+Boot's EFI executable and the independent InfiltratorFS EFI driver are
+on the disposable FAT32 bootstrap image. A separate, canonical Format
+0.19 InfiltratorFS image contains the **real InfiltratorOS kernel image**,
+the generated initramfs and a known source marker. Boot must discover
+that InfiltratorFS volume through the filesystem-owned UEFI driver,
+load the kernel and initramfs, and transfer execution. The test then
+compiles `infiltratorfs.ko` against the matching freshly built
+`0.1.0-infiltrator` kernel, bundles its declared dependencies into the
+initramfs, mounts that same InfiltratorFS image in the guest, reads the
+marker, writes and verifies a file, and cleanly unmounts it.
+
+A successful result requires all guest markers, ending in
+`INFS_BOOT_KERNEL_FILESYSTEM_PASS`. A failed UEFI driver, incompatible
+module, unsuccessful mount or bad handoff is a **failure**, not a simulated
+success. Source inputs are pinned to Boot 0.1.39 and InfiltratorFS
+commit `c8f6431f2de34806d8614a241cab8db5a0daad48`.
+Trial logs/images remain under `/Temporary/InfiltratorOS/Kernel/Tests`.
+The ordinary `.run` path still does not modify Mint boot files or
+activate the new kernel. GitHub's lightweight `.run` release job checks
+trial script syntax and packaging; it does not run the heavyweight VM.
+The first real QEMU trial and physical hardware boot are separate
+qualifications and must not be reported as PASS before guest evidence exists.

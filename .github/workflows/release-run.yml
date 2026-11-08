@@ -25,6 +25,9 @@ jobs:
           bash tests/native-builddeb-paths.sh
           bash tests/install-native.sh
           bash tests/module-runtime.sh
+          bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
+          python3 -m py_compile tests/infiltratorfs-native-boot.py
+          bash scripts/infiltrator/test-infiltratorfs-boot.sh --help | grep -Fq 'Format 0.19 InfiltratorFS'
       - name: Package tiny GitHub source downloader (no kernel compile)
         shell: bash
         env:
@@ -45,6 +48,7 @@ jobs:
           grep -Fq 'Existing native Kernel' "$installer"
           grep -Fq 'fetch --no-tags --depth 1 origin "$expected_commit"' "$installer"
           bash "$installer" --help | grep -Fq '/System/Kernel'
+          bash "$installer" --help | grep -Fq -- '--trial-infiltratorfs'
           if grep -Fq '__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__' "$installer"; then
             echo 'ERROR: old embedded-source format detected'
             exit 1
