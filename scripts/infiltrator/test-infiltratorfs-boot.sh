@@ -120,9 +120,44 @@ boot_version=0.1.40
 boot_pkg="infiltrator-boot_${boot_version}_amd64.deb"
 boot_url="https://github.com/Infiltrator-Projects/Boot/releases/download/v$boot_version"
 log "Downloading checksum-verified Boot $boot_version"
-wget -q -O "$trial/$boot_pkg" "$boot_url/$boot_pkg" || fail 'Boot download failed'
-wget -q -O "$trial/BOOT-SHA256SUMS.txt" "$boot_url/SHA256SUMS.txt" ||
-  fail 'Boot checksum inventory download failed'
+# The pinned Boot binary is immutable. GitHub's browser/CDN release URL can
+# intermittently return HTTP 504; prefer the authenticated asset API and
+# verify the immutable per-asset digest before accepting either transport.
+fetch_boot_asset() {
+  local filename=$1 asset_id=$2 expected=$3
+  local target="$trial/$filename"
+  local asset_api="https://api.github.com/repos/Infiltrator-Projects/Boot/releases/assets/$asset_id"
+  local -a headers=(-H 'Accept: application/octet-stream'
+                    -H 'X-GitHub-Api-Version: 2022-11-28')
+  [[ -z "${GITHUB_TOKEN:-}" ]] ||
+    headers+=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  rm -f "$target"
+  if curl --fail --silent --show-error --location --retry 2 --retry-all-errors \
+      --retry-delay 2 --connect-timeout 15 --max-time 120 --max-filesize 16777216 \
+      "${headers[@]}" -o "$target" "$asset_api"; then
+    if [[ $(sha256sum "$target" | awk '{print $1}') == "$expected" ]]; then
+      log "Verified Boot $filename using release asset API"
+      return 0
+    fi
+    log "Release asset API returned bytes that failed pinned SHA-256; trying browser path"
+  fi
+  rm -f "$target"
+  if curl --fail --silent --show-error --location --retry 2 --retry-all-errors \
+      --retry-delay 2 --connect-timeout 15 --max-time 120 --max-filesize 16777216 \
+      -o "$target" "$boot_url/$filename"; then
+    if [[ $(sha256sum "$target" | awk '{print $1}') == "$expected" ]]; then
+      log "Verified Boot $filename using release browser path"
+      return 0
+    fi
+  fi
+  rm -f "$target"
+  fail "Boot $filename unavailable or failed pinned SHA-256 on both GitHub routes"
+}
+fetch_boot_asset "$boot_pkg" 722859404 \
+  e8ace7882fec343d92c9b4e01819335ce8c54805ce504e0e0f3c066ae1ed62e1
+fetch_boot_asset BOOT-SHA256SUMS.txt 722859405 \
+  a169763c6193540bbc7a8a13914b57cab19ff2a12227fdd1afac5dc736b46288
+
 # Match exactly one package name and a complete SHA-256, never a substring.
 awk -v package="$boot_pkg" '
   $2 == package && length($1) == 64 && $1 !~ /[^0123456789abcdef]/ {
