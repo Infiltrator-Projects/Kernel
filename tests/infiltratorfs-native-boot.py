@@ -136,17 +136,28 @@ actual=$(/bin/busybox uname -r)
 {module_commands}
 /bin/busybox echo "INFS_KERNEL_MODULE_LOAD_PASS" >/dev/console
 /bin/busybox mkdir -p /rootfs
-/bin/busybox mdev -s || :
-/bin/busybox sleep 2
+# Discover actual Linux block devices rather than assuming virtio/SCSI names.
+# Device registration can lag behind the first initramfs instruction.
+# A successful mount alone is insufficient: require the volume identity.
 mounted=0
-for dev in /dev/vdb /dev/vda /dev/sdb /dev/sda; do
-  if [ -b "$dev" ] && /bin/busybox mount -t infiltratorfs -o rw "$dev" /rootfs; then
-    if [ -f /rootfs/System/Boot/source-identity.txt ]; then
-      mounted=1
-      break
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  /bin/busybox mdev -s || :
+  for sysdev in /sys/class/block/*; do
+    [ -e "$sysdev" ] || continue
+    name=${{sysdev##*/}}
+    case "$name" in loop*|ram*|sr*) continue ;; esac
+    dev="/dev/$name"
+    [ -b "$dev" ] || continue
+    if /bin/busybox mount -t infiltratorfs -o rw "$dev" /rootfs; then
+      if [ "$(/bin/busybox cat /rootfs/System/Boot/source-identity.txt 2>/dev/null)" = "INFS_BOOT_DISK_EXCLUSIVE" ]; then
+        mounted=1
+        break
+      fi
+      /bin/busybox umount /rootfs || fail "WRONG_VOLUME_UNMOUNT"
     fi
-    /bin/busybox umount /rootfs || :
-  fi
+  done
+  [ "$mounted" = 1 ] && break
+  /bin/busybox sleep 1
 done
 [ "$mounted" = 1 ] || fail "INTRAFS_MOUNT"
 [ "$(/bin/busybox cat /rootfs/System/Boot/source-identity.txt)" = "INFS_BOOT_DISK_EXCLUSIVE" ] || fail "SOURCE_IDENTITY"

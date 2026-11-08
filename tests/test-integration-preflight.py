@@ -52,6 +52,12 @@ def main() -> None:
         assert b"InfiltratorOS-9.8.7.img" in payload
         assert b"9.8.7-infiltrator" in payload
         assert b"INFS_REBOOT_PERSISTENCE_PASS" in payload
+        # Enumerate the actual guest devices, allow bounded registration delay,
+        # and reject a foreign mount before deciding the expected disk is absent.
+        assert b"/sys/class/block/*" in payload
+        assert b"for attempt in 1 2 3 4 5 6 7 8 9 10" in payload
+        assert b"WRONG_VOLUME_UNMOUNT" in payload
+        assert b"/dev/vdb /dev/vda /dev/sdb /dev/sda" not in payload
     print("THREE_WAY_PREFLIGHT_PASS: module uniqueness, CPIO and product ABI")
 
 
