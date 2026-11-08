@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 95
     env:
-      EXT2_COMMIT: 7ec5981bab993080514bba20bc6188094f3f636d
+      EXT2_COMMIT: ee6aa36a37f2cb96a9007d38e985a0d76a819cd4
       NATIVE_RELEASE: 0.1.0-infiltrator
     steps:
       - name: Checkout Kernel main
