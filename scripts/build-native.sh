@@ -191,12 +191,18 @@ bash "$root/scripts/infiltrator/prepare-certificates.sh" "$source_dir" "$obj"
 # Compile the InfiltratorOS module helper path into the native kernel.
 native_modprobe="/System/Kernel/Runtime/InfiltratorOS-$product_version/modprobe"
 "$source_dir/scripts/config" --file "$obj/.config" --set-str MODPROBE_PATH "$native_modprobe"
+# Linux VFS/FUSE is a *generic* bridge for independently owned filesystem
+# engines in /System/Filesystems. Keep it built into vmlinux (not another
+# format-specific .ko), so the native FAT12.so process host can mount volumes.
+"$source_dir/scripts/config" --file "$obj/.config" --enable FUSE_FS
 # Distro configs enable filesystem VFS drivers which are now independently
 # owned in Filesystem-* repositories.  Retain FAT/EXT and shared VFS, but
 # exclude the non-boot duplicates from both vmlinux and built .ko outputs.
 python3 "$root/scripts/infiltrator/prune-external-filesystems.py" apply "$obj/.config"
 log "Configuring host baseline with independently owned non-boot filesystems excluded"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
+grep -Fxq 'CONFIG_FUSE_FS=y' "$obj/.config" ||
+  fail 'Generic filesystem SO bridge requires built-in CONFIG_FUSE_FS=y'
 # Kconfig can re-enable an option through selects/defaults.  Fail closed if
 # any retired driver survives effective olddefconfig reconciliation.
 python3 "$root/scripts/infiltrator/prune-external-filesystems.py" check "$obj/.config"
