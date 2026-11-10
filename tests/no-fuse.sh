@@ -26,7 +26,7 @@ if grep -Eq 'fs/fuse/|CONFIG_(FUSE_FS|CUSE|VIRTIO_FS)|fuse/' fs/Kconfig fs/Makef
   exit 1
 fi
 
-if grep -Eqr '^CONFIG_(FUSE_FS|CUSE|VIRTIO_FS|FUSE_DAX|FUSE_PASSTHROUGH|FUSE_IO_URING)=[ym]$' arch/*/configs 2>/dev/null; then
+if grep -Ern '^CONFIG_(FUSE_FS|CUSE|VIRTIO_FS|FUSE_DAX|FUSE_PASSTHROUGH|FUSE_IO_URING)=[ym]$' arch/*/configs 2>/dev/null; then
   echo 'PROHIBITED filesystem FUSE in checked-in architecture config' >&2
   exit 1
 fi
