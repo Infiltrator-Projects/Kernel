@@ -1,0 +1,17 @@
+name: Reject filesystem FUSE from Kernel
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-fuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
+      - name: Check that no FUSE source, transport or dependency returns
+        run: bash tests/no-fuse.sh

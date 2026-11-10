@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -euo pipefail
 cd "$(dirname "$0")/.."
+bash tests/no-fuse.sh
 bash -n scripts/build-native.sh
 bash -n scripts/infiltrator/module-runtime.sh
 python3 tests/filesystem-module-ownership.py
