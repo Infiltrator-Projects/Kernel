@@ -93,7 +93,6 @@ Documentation for filesystem implementations.
    hfs
    hfsplus
    hpfs
-   fuse/index
    inotify
    isofs
    nilfs2
@@ -118,7 +117,6 @@ Documentation for filesystem implementations.
    ubifs
    ubifs-authentication
    udf
-   virtiofs
    vfat
    xfs/index
    zonefs

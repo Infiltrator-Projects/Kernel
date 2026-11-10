@@ -24,7 +24,6 @@ Linux Kernel中的文件系統
 .. toctree::
    :maxdepth: 2
 
-   virtiofs
    debugfs
    tmpfs
 

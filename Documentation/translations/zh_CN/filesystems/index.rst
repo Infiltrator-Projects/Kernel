@@ -33,7 +33,6 @@ Linux Kernel中的文件系统
 .. toctree::
    :maxdepth: 2
 
-   virtiofs
    debugfs
    tmpfs
    ubifs
