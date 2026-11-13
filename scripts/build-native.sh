@@ -45,10 +45,15 @@ if (( ! skip_deps )); then
   command -v apt-cache >/dev/null || fail "APT is missing"
   apt-cache showsrc "$pkg" >/dev/null 2>&1 || fail "Enable deb-src repositories and run sudo apt update"
   log "Checking/installing build dependencies; sudo may request approval"
-  sudo apt-get install -y --no-install-recommends build-essential bc bison flex fakeroot dwarves libelf-dev libssl-dev rsync dpkg-dev
+  sudo apt-get install -y --no-install-recommends build-essential bc bison flex fakeroot dwarves libdw-dev libelf-dev libssl-dev rsync dpkg-dev debhelper kmod
   sudo apt-get build-dep -y "$pkg"
 fi
 for tool in make gcc dpkg-deb sha256sum python3; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
+if [[ "$mode" == --build-only ]]; then
+  for tool in dpkg-buildpackage dh_listpackages depmod; do
+    command -v "$tool" >/dev/null || fail "Missing packaging utility: $tool (install build dependencies before retrying)"
+  done
+fi
 if [[ -n "$jobs" ]]; then
   [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || fail "Invalid --jobs count"
 else

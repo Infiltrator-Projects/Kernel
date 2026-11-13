@@ -3,6 +3,8 @@
 # Verify the real Kbuild Debian generator's identity, without compiling a kernel.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd -P)
+# Kbuild executes both package entry points directly from a Git checkout.
+test -x "$root/scripts/package/builddeb"
 testdir=$(mktemp -d)
 trap 'rm -rf -- "$testdir"' EXIT
 mkdir -p "$testdir/include/config"
@@ -17,7 +19,7 @@ printf 'CONFIG_MODULES=y\n' > "$testdir/.config"
   env ARCH=x86 SRCARCH=x86 UTS_MACHINE=x86_64 KERNELRELEASE=0.1.1 \
     srctree="$root" KCONFIG_CONFIG="$testdir/.config" \
     INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION=0.1.1 \
-    sh "$root/scripts/package/mkdebian"
+    "$root/scripts/package/mkdebian"
 )
 control="$testdir/debian/control"
 changelog="$testdir/debian/changelog"

@@ -39,7 +39,7 @@ jobs:
             build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
             dwarves cpio rsync kmod busybox-static qemu-system-x86 qemu-utils \
             ovmf dosfstools mtools gnu-efi cmake pkg-config python3 git wget \
-            file zstd liblz4-dev e2fsprogs gdisk
+            file zstd liblz4-dev e2fsprogs gdisk debhelper libdw-dev
           df -h .
           command -v qemu-system-x86_64
           test -s /usr/share/OVMF/OVMF_CODE_4M.fd
@@ -63,7 +63,7 @@ jobs:
           scripts/config --file "$obj/.config" \
             -e EFI -e EFI_STUB -e PCI -e PCI_MSI -e VMD -e VIRTIO \
             -e VIRTIO_PCI -e VIRTIO_BLK \
-            -e MODULES -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
+            -e MODULES -m DUMMY -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
             -e RD_GZIP -e BLK_DEV -e BLK_DEV_NVME -e EXT4_FS \
             -d MODULE_SIG -d SYSTEM_TRUSTED_KEYRING \
@@ -71,7 +71,7 @@ jobs:
             --set-str SYSTEM_TRUSTED_KEYS '' \
             --set-str SYSTEM_REVOCATION_KEYS '' \
             --set-str MODPROBE_PATH "/System/Kernel/Runtime/InfiltratorOS-$release/modprobe" \
-            -d DEBUG_INFO
+            -d DEBUG_INFO_NONE -e DEBUG_INFO_DWARF4 -e DEBUG_INFO_REDUCED -d DEBUG_INFO_BTF
           # Same filesystem exclusions as the native Mint/Debian builder.
           python3 scripts/infiltrator/prune-external-filesystems.py apply "$obj/.config"
           make O="$obj" KERNELRELEASE="$release" olddefconfig
@@ -85,21 +85,24 @@ jobs:
           grep -Fqx 'CONFIG_DEVTMPFS_MOUNT=y' "$obj/.config"
           grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config"
           grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
+          grep -Fqx 'CONFIG_DUMMY=m' "$obj/.config"
+          grep -Fqx 'CONFIG_DEBUG_INFO=y' "$obj/.config"
           grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"
           grep -Fqx 'CONFIG_DEVTMPFS=y' "$obj/.config"
           grep -Fqx 'CONFIG_SERIAL_8250_CONSOLE=y' "$obj/.config"
           bash scripts/infiltrator/verify-module-helper.sh "$obj" "$release"
           test "$(cat "$obj/include/config/kernel.release")" = "$release"
 
-      - name: Compile the real InfiltratorOS kernel and matching module tree
+      - name: Compile and package the real InfiltratorOS kernel with bindeb-pkg
         shell: bash
         timeout-minutes: 65
         run: |
           set -euo pipefail
           obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
-          # Retain the canonical version, not the imported Linux 7.0.14 ABI.
+          export INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION="$NATIVE_RELEASE"
+          # Exercise the same packaging entry point as the public installer.
           make O="$obj" KERNELRELEASE="$NATIVE_RELEASE" \
-            -j 4 bzImage modules > "$RUNNER_TEMP/Kernel-build.log" 2>&1 || {
+            -j 4 bindeb-pkg > "$RUNNER_TEMP/Kernel-build.log" 2>&1 || {
             tail -n 130 "$RUNNER_TEMP/Kernel-build.log" >&2
             exit 1
           }
@@ -107,25 +110,20 @@ jobs:
           grep -Fqx "#define UTS_RELEASE \"$NATIVE_RELEASE\"" "$obj/include/generated/utsrelease.h"
           echo 'REAL_INFILTRATOROS_KERNEL_COMPILE_PASS'
 
-      - name: Stage actual native kernel without installing it on the runner
+      - name: Stage the packaged kernel and verify installation in an isolated root
         shell: bash
         run: |
           set -euo pipefail
-          obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
-          stage="$RUNNER_TEMP/InfiltratorOS/Staging/ThreeWay"
-          images="$stage/System/Kernel/Images"
-          modules="$stage/System/Kernel/Modules/InfiltratorOS-$NATIVE_RELEASE/kernel"
-          mkdir -p "$images" "$modules"
-          cp "$obj/arch/x86/boot/bzImage" "$images/InfiltratorOS-$NATIVE_RELEASE.img"
-          cp "$obj/.config" "$images/InfiltratorOS-$NATIVE_RELEASE.config"
-          # Module dependency discovery must see the *actual* built tree.
-          # Do not copy host Ubuntu modules with a different vermagic.
-          while IFS= read -r -d '' ko; do
-            relative="${ko#"$obj"/}"
-            mkdir -p "$modules/$(dirname "$relative")"
-            cp "$ko" "$modules/$relative"
-          done < <(find "$obj" -type f -name '*.ko' -print0)
-          find "$modules" -type f -name '*.ko' | wc -l
+          export INFILTRATOROS_TEMP_ROOT="$RUNNER_TEMP/InfiltratorOS"
+          obj="$INFILTRATOROS_TEMP_ROOT/Build/obj"
+          packages="$(dirname "$obj")"
+          stage="$INFILTRATOROS_TEMP_ROOT/Staging/ThreeWay"
+          install_root="$INFILTRATOROS_TEMP_ROOT/Tests/PackageInstall"
+          mkdir -p "$INFILTRATOROS_TEMP_ROOT/Kernel" "$install_root"
+          (cd "$packages" && sha256sum ./*.deb > "SHA256SUMS-InfiltratorOS-Kernel-$NATIVE_RELEASE.txt")
+          bash scripts/infiltrator/stage-native.sh --objects "$obj" --packages "$packages" --output "$stage"
+          bash scripts/infiltrator/install-native.sh --packages "$packages" --install-root "$install_root"
+          cmp "$obj/arch/x86/boot/bzImage" "$install_root/System/Kernel/Images/InfiltratorOS-$NATIVE_RELEASE.img"
           echo "NATIVE_STAGE=$stage" >> "$GITHUB_ENV"
           echo "NATIVE_OBJECTS=$obj" >> "$GITHUB_ENV"
           echo 'NATIVE_KERNEL_STAGE_PASS'

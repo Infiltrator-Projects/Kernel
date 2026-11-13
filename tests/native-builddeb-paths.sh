@@ -53,7 +53,7 @@ run_package() {
       ARCH=x86 SRCARCH=x86 KERNELRELEASE="$abi" \
       KCONFIG_CONFIG="$sandbox/$work/.config" \
       MAKE="$sandbox/fake-make" srctree="$sandbox/source" \
-      sh "$root/scripts/package/builddeb" "$pkg"
+      "$root/scripts/package/builddeb" "$pkg"
   )
 }
 run_package native infiltratoros-kernel-image-$version 1
