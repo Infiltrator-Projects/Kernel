@@ -39,7 +39,7 @@ jobs:
             build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
             dwarves cpio rsync kmod busybox-static qemu-system-x86 qemu-utils \
             ovmf dosfstools mtools gnu-efi cmake pkg-config python3 git wget \
-            file zstd liblz4-dev
+            file zstd liblz4-dev e2fsprogs gdisk
           df -h .
           command -v qemu-system-x86_64
           test -s /usr/share/OVMF/OVMF_CODE_4M.fd
@@ -63,7 +63,7 @@ jobs:
             -e VIRTIO_PCI -e VIRTIO_BLK \
             -e MODULES -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
-            -e RD_GZIP -e BLK_DEV \
+            -e RD_GZIP -e BLK_DEV -e BLK_DEV_NVME -e EXT4_FS \
             -d MODULE_SIG -d SYSTEM_TRUSTED_KEYRING \
             -d 9P_FS -d NET_9P \
             --set-str SYSTEM_TRUSTED_KEYS '' \
@@ -78,6 +78,8 @@ jobs:
           grep -Fqx 'CONFIG_EFI_STUB=y' "$obj/.config"
           grep -Fqx 'CONFIG_VIRTIO_PCI=y' "$obj/.config"
           grep -Fqx 'CONFIG_VIRTIO_BLK=y' "$obj/.config"
+          grep -Fqx 'CONFIG_BLK_DEV_NVME=y' "$obj/.config"
+          grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config"
           grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
           grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"
           grep -Fqx 'CONFIG_DEVTMPFS=y' "$obj/.config"
@@ -124,6 +126,12 @@ jobs:
           echo "NATIVE_OBJECTS=$obj" >> "$GITHUB_ENV"
           echo 'NATIVE_KERNEL_STAGE_PASS'
 
+      - name: Mount an NVMe EXT4 root with the compiled kernel
+        shell: bash
+        run: |
+          bash tests/boot-ext4-root.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
+            "$RUNNER_TEMP/InfiltratorOS/Tests"
+
       - name: Boot from InfiltratorFS using real Boot EFI and real Kernel
         shell: bash
         timeout-minutes: 35
@@ -159,6 +167,7 @@ jobs:
           name: ThreeWay-Boot-InfiltratorFS-Kernel-${{ github.sha }}
           path: |
             ${{ runner.temp }}/Kernel-build.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-EXT4.*/serial*.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/UEFI-build.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/CMake.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/FilesystemBuild.log
