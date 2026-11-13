@@ -88,7 +88,7 @@ jobs:
           grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"
           grep -Fqx 'CONFIG_DEVTMPFS=y' "$obj/.config"
           grep -Fqx 'CONFIG_SERIAL_8250_CONSOLE=y' "$obj/.config"
-          grep -Fqx "CONFIG_MODPROBE_PATH=\"/System/Kernel/Runtime/InfiltratorOS-$release/modprobe\"" "$obj/.config"
+          bash scripts/infiltrator/verify-module-helper.sh "$obj" "$release"
           test "$(cat "$obj/include/config/kernel.release")" = "$release"
 
       - name: Compile the real InfiltratorOS kernel and matching module tree

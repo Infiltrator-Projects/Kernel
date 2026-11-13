@@ -237,8 +237,9 @@ release=$(bash "$root/scripts/infiltrator/run-kbuild.sh" -s --no-print-directory
   fail 'Missing compiled UTS release header'
 grep -Fqx "#define UTS_RELEASE \"$release_id\"" "$obj/include/generated/utsrelease.h" ||
   fail 'Compiled UTS_RELEASE still contains the imported Linux source version'
-grep -Fqx "CONFIG_MODPROBE_PATH=\"$native_modprobe\"" "$obj/include/config/auto.conf" ||
-  fail "Compiled kernel has not selected the native InfiltratorOS module helper"
+# kmod.c consumes the generated C header. Kconfig's Makefile output
+# (include/config/auto.conf) writes the same string without C quotes.
+bash "$root/scripts/infiltrator/verify-module-helper.sh" "$obj" "$product_version"
 log "Generated InfiltratorOS kernel release and module ABI: $release"
 if [[ "$mode" == --configure-only ]]; then log "Configured at $obj/.config"; exit 0; fi
 # The first-party native build uses InfiltratorOS's own release and vermagic.
