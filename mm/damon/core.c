@@ -221,8 +221,8 @@ int damon_set_regions(struct damon_target *t, struct damon_addr_range *ranges,
 	for (i = 0; i < nr_ranges; i++) {
 		unsigned long start, end;
 
-		start = ALIGN_DOWN(ranges[i].start, min_sz_region);
-		end = ALIGN(ranges[i].end, min_sz_region);
+		start = ALIGN_DOWN(ranges[i].start, min_region_sz);
+		end = ALIGN(ranges[i].end, min_region_sz);
 		if (start >= end)
 			return -EINVAL;
 		if (i > 0 && last_end > start)
