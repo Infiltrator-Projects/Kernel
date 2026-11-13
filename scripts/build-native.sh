@@ -195,12 +195,15 @@ native_modprobe="/System/Kernel/Runtime/InfiltratorOS-$product_version/modprobe"
 # owned in Filesystem-* repositories.  Retain FAT/EXT and shared VFS, but
 # exclude the non-boot duplicates from both vmlinux and built .ko outputs.
 python3 "$root/scripts/infiltrator/prune-external-filesystems.py" apply "$obj/.config"
-# An EXT4 root must mount before a module stored on that root is reachable.
-"$source_dir/scripts/config" --file "$obj/.config" --enable EXT4_FS
+# The root device and EXT4 must be reachable before native modules on disk.
+"$source_dir/scripts/config" --file "$obj/.config" \
+  --enable EXT4_FS --enable BLK_DEV_NVME
 log "Configuring host baseline with independently owned non-boot filesystems excluded"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
 grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config" ||
   fail 'EXT4 root filesystem support must be built into the native kernel'
+grep -Fqx 'CONFIG_BLK_DEV_NVME=y' "$obj/.config" ||
+  fail 'NVMe root device support must be built into the native kernel'
 if grep -Eq '^CONFIG_(FUSE_FS|CUSE|VIRTIO_FS|FUSE_DAX|FUSE_PASSTHROUGH|FUSE_IO_URING)=[ym]$' "$obj/.config"; then
   fail 'Filesystem FUSE is prohibited in the native kernel configuration'
 fi
