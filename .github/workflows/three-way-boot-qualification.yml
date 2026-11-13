@@ -52,14 +52,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(cat VERSION)" = 0.1.1
+          release=$(<VERSION)
+          [[ $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "NATIVE_RELEASE=$release" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/InfiltratorOS/Build/obj"
           obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
           make O="$obj" x86_64_defconfig
           # Built-in storage devices are essential before root userspace
           # can load any optional filesystem module from the initramfs.
           scripts/config --file "$obj/.config" \
-            -e EFI -e EFI_STUB -e PCI -e VIRTIO \
+            -e EFI -e EFI_STUB -e PCI -e PCI_MSI -e VMD -e VIRTIO \
             -e VIRTIO_PCI -e VIRTIO_BLK \
             -e MODULES -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
@@ -68,24 +70,26 @@ jobs:
             -d 9P_FS -d NET_9P \
             --set-str SYSTEM_TRUSTED_KEYS '' \
             --set-str SYSTEM_REVOCATION_KEYS '' \
-            --set-str MODPROBE_PATH '/System/Kernel/Runtime/InfiltratorOS-0.1.1/modprobe' \
+            --set-str MODPROBE_PATH "/System/Kernel/Runtime/InfiltratorOS-$release/modprobe" \
             -d DEBUG_INFO
           # Same filesystem exclusions as the native Mint/Debian builder.
           python3 scripts/infiltrator/prune-external-filesystems.py apply "$obj/.config"
-          make O="$obj" KERNELRELEASE=0.1.1 olddefconfig
+          make O="$obj" KERNELRELEASE="$release" olddefconfig
           python3 scripts/infiltrator/prune-external-filesystems.py check "$obj/.config"
-          make O="$obj" KERNELRELEASE=0.1.1 prepare
+          make O="$obj" KERNELRELEASE="$release" prepare
           grep -Fqx 'CONFIG_EFI_STUB=y' "$obj/.config"
           grep -Fqx 'CONFIG_VIRTIO_PCI=y' "$obj/.config"
           grep -Fqx 'CONFIG_VIRTIO_BLK=y' "$obj/.config"
           grep -Fqx 'CONFIG_BLK_DEV_NVME=y' "$obj/.config"
+          grep -Fqx 'CONFIG_VMD=y' "$obj/.config"
+          grep -Fqx 'CONFIG_DEVTMPFS_MOUNT=y' "$obj/.config"
           grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config"
           grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
           grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"
           grep -Fqx 'CONFIG_DEVTMPFS=y' "$obj/.config"
           grep -Fqx 'CONFIG_SERIAL_8250_CONSOLE=y' "$obj/.config"
-          grep -Fqx 'CONFIG_MODPROBE_PATH="/System/Kernel/Runtime/InfiltratorOS-0.1.1/modprobe"' "$obj/.config"
-          test "$(cat "$obj/include/config/kernel.release")" = 0.1.1
+          grep -Fqx "CONFIG_MODPROBE_PATH=\"/System/Kernel/Runtime/InfiltratorOS-$release/modprobe\"" "$obj/.config"
+          test "$(cat "$obj/include/config/kernel.release")" = "$release"
 
       - name: Compile the real InfiltratorOS kernel and matching module tree
         shell: bash
@@ -94,13 +98,13 @@ jobs:
           set -euo pipefail
           obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
           # Retain the canonical version, not the imported Linux 7.0.14 ABI.
-          make O="$obj" KERNELRELEASE=0.1.1 \
+          make O="$obj" KERNELRELEASE="$NATIVE_RELEASE" \
             -j 4 bzImage modules > "$RUNNER_TEMP/Kernel-build.log" 2>&1 || {
             tail -n 130 "$RUNNER_TEMP/Kernel-build.log" >&2
             exit 1
           }
           test -s "$obj/arch/x86/boot/bzImage"
-          grep -Fqx '#define UTS_RELEASE "0.1.1"' "$obj/include/generated/utsrelease.h"
+          grep -Fqx "#define UTS_RELEASE \"$NATIVE_RELEASE\"" "$obj/include/generated/utsrelease.h"
           echo 'REAL_INFILTRATOROS_KERNEL_COMPILE_PASS'
 
       - name: Stage actual native kernel without installing it on the runner
@@ -110,10 +114,10 @@ jobs:
           obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
           stage="$RUNNER_TEMP/InfiltratorOS/Staging/ThreeWay"
           images="$stage/System/Kernel/Images"
-          modules="$stage/System/Kernel/Modules/InfiltratorOS-0.1.1/kernel"
+          modules="$stage/System/Kernel/Modules/InfiltratorOS-$NATIVE_RELEASE/kernel"
           mkdir -p "$images" "$modules"
-          cp "$obj/arch/x86/boot/bzImage" "$images/InfiltratorOS-0.1.1.img"
-          cp "$obj/.config" "$images/InfiltratorOS-0.1.1.config"
+          cp "$obj/arch/x86/boot/bzImage" "$images/InfiltratorOS-$NATIVE_RELEASE.img"
+          cp "$obj/.config" "$images/InfiltratorOS-$NATIVE_RELEASE.config"
           # Module dependency discovery must see the *actual* built tree.
           # Do not copy host Ubuntu modules with a different vermagic.
           while IFS= read -r -d '' ko; do

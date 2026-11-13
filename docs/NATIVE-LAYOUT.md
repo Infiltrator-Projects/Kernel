@@ -161,10 +161,11 @@ This follows the existing InfiltratorOS authority:
 
 On a Mint system with an EXT4 root, the InfiltratorOS kernel image lives
 in `/System/Kernel/Images/`, with its own module tree under
-`/System/Kernel/Modules/`. The native build enables EXT4 in the kernel
-image. Mint's kernel and initramfs in `/boot` remain available through
-Mint's existing GRUB EFI entry as an independent recovery path. BOOT must
-be able to read the native image and its matching initramfs from EXT4
+`/System/Kernel/Modules/`. The native build enables EXT4, NVMe and Intel VMD
+in the kernel image and mounts devtmpfs on direct boot. Mint's kernel and
+initramfs in `/boot` remain available through Mint's existing GRUB EFI entry
+as an independent recovery path. BOOT must
+be able to read the native image and any matching initramfs from EXT4
 before the native kernel's EXT4 support can take over.
 
 The `Modules/InfiltratorOS-<component-version>/` hierarchy identifies the

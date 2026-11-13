@@ -22,7 +22,6 @@ jobs:
     timeout-minutes: 95
     env:
       EXT2_COMMIT: 86247ecb7828b2e3a312c0ee36e9fe51ceef5231
-      NATIVE_RELEASE: 0.1.1
     steps:
       - name: Checkout Kernel main
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
@@ -36,7 +35,9 @@ jobs:
             kmod busybox-static qemu-system-x86 qemu-utils \
             e2fsprogs cpio gzip file python3 git
           bash -n tests/test-ext2-module-qemu.sh
-          test "$(cat VERSION)" = 0.1.1
+          release=$(<VERSION)
+          [[ $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "NATIVE_RELEASE=$release" >> "$GITHUB_ENV"
 
       - name: Fetch pinned independent EXT2 owner source
         run: |
@@ -50,7 +51,7 @@ jobs:
           test -s "$provider/native/filesystems/ext2/linux/Makefile"
           echo "EXT2_PROVIDER=$provider" >> "$GITHUB_ENV"
 
-      - name: Configure and build actual 0.1.1 ABI and modules
+      - name: Configure and build the native ABI and modules
         timeout-minutes: 60
         run: |
           set -euo pipefail

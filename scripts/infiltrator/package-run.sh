@@ -34,7 +34,7 @@ fail() { printf 'InfiltratorOS Kernel .run: ERROR: %s\n' "$*" >&2; exit 1; }
 repo='https://github.com/Infiltrator-Projects/Kernel.git'
 expected_commit=__PINNED_COMMIT__
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
-  echo 'Usage: ./InfiltratorOS-Kernel-0.1.1-amd64.run [--build-only] [--jobs N] [--install-deps] [--replace-existing] [--trial-infiltratorfs]'
+  printf 'Usage: %s [--build-only] [--jobs N] [--install-deps] [--replace-existing] [--trial-infiltratorfs]\n' "$0"
   echo 'Downloads the exact release source from GitHub into /Temporary/InfiltratorOS/Kernel.'
   echo 'Freshly compiles on THIS machine, verifies actual native Debian package paths,'
   echo 'and installs files under /System/Kernel (not under Mint /boot).'

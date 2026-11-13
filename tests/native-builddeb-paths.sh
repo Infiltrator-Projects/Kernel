@@ -49,38 +49,38 @@ run_package() {
   local work=$1 pkg=$2 native=$3
   (
     cd "$sandbox/$work"
-    INFILTRATOROS_NATIVE_PACKAGE="$native" INFILTRATOROS_KERNEL_VERSION=0.1.1 \
+    INFILTRATOROS_NATIVE_PACKAGE="$native" INFILTRATOROS_KERNEL_VERSION="$version" \
       ARCH=x86 SRCARCH=x86 KERNELRELEASE="$abi" \
       KCONFIG_CONFIG="$sandbox/$work/.config" \
       MAKE="$sandbox/fake-make" srctree="$sandbox/source" \
       sh "$root/scripts/package/builddeb" "$pkg"
   )
 }
-run_package native infiltratoros-kernel-image-0.1.1 1
-runtime="$sandbox/native/debian/infiltratoros-kernel-image-0.1.1"
-[[ -s "$runtime/System/Kernel/Images/InfiltratorOS-0.1.1.img" ]]
-[[ -s "$runtime/System/Kernel/Images/InfiltratorOS-0.1.1.config" ]]
-[[ -s "$runtime/System/Kernel/Images/InfiltratorOS-0.1.1.map" ]]
-[[ -s "$runtime/System/Kernel/Modules/InfiltratorOS-0.1.1/kernel/drivers/test.ko" ]]
+run_package native infiltratoros-kernel-image-$version 1
+runtime="$sandbox/native/debian/infiltratoros-kernel-image-$version"
+[[ -s "$runtime/System/Kernel/Images/InfiltratorOS-$version.img" ]]
+[[ -s "$runtime/System/Kernel/Images/InfiltratorOS-$version.config" ]]
+[[ -s "$runtime/System/Kernel/Images/InfiltratorOS-$version.map" ]]
+[[ -s "$runtime/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/test.ko" ]]
 [[ -d "$runtime/System/Kernel/Filesystems" && -d "$runtime/System/Kernel/Firmware" ]]
-[[ -x "$runtime/System/Kernel/Runtime/InfiltratorOS-0.1.1/modprobe" ]]
-[[ $(cat "$runtime/System/Kernel/Runtime/InfiltratorOS-0.1.1/VERSION") == 0.1.1 ]]
-[[ -s "$runtime/System/Kernel/Runtime/InfiltratorOS-0.1.1/infiltratoros-kernel-modules.service" ]]
+[[ -x "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" ]]
+[[ $(cat "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/VERSION") == $version ]]
+[[ -s "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/infiltratoros-kernel-modules.service" ]]
 [[ ! -e "$runtime/lib" && ! -e "$runtime/usr" && ! -e "$runtime/boot" ]]
 [[ ! -e "$runtime/DEBIAN/postinst" && ! -e "$runtime/DEBIAN/preinst" ]]
-run_package native infiltratoros-kernel-headers-0.1.1 1
-headers="$sandbox/native/debian/infiltratoros-kernel-headers-0.1.1"
-[[ -s "$headers/System/Kernel/Headers/InfiltratorOS-0.1.1/include/verified.h" ]]
-[[ -L "$headers/System/Kernel/Modules/InfiltratorOS-0.1.1/build" ]]
+run_package native infiltratoros-kernel-headers-$version 1
+headers="$sandbox/native/debian/infiltratoros-kernel-headers-$version"
+[[ -s "$headers/System/Kernel/Headers/InfiltratorOS-$version/include/verified.h" ]]
+[[ -L "$headers/System/Kernel/Modules/InfiltratorOS-$version/build" ]]
 [[ ! -e "$headers/lib" && ! -e "$headers/usr" && ! -e "$headers/boot" ]]
 # Test debug without parsing ELF build IDs; vmlinux and related links must
 # still reside entirely inside the native Debug hierarchy.
 sed -i '/^CONFIG_MODULES=y$/d' "$sandbox/native/include/config/auto.conf"
 printf 'Compiled vmlinux debug symbols\n' > "$sandbox/native/vmlinux"
-run_package native infiltratoros-kernel-image-0.1.1-dbg 1
-debug="$sandbox/native/debian/infiltratoros-kernel-image-0.1.1-dbg"
-[[ -s "$debug/System/Kernel/Debug/InfiltratorOS-0.1.1/lib/modules/$abi/vmlinux" ]]
-[[ -L "$debug/System/Kernel/Debug/InfiltratorOS-0.1.1/boot/vmlinux-$abi" ]]
+run_package native infiltratoros-kernel-image-$version-dbg 1
+debug="$sandbox/native/debian/infiltratoros-kernel-image-$version-dbg"
+[[ -s "$debug/System/Kernel/Debug/InfiltratorOS-$version/lib/modules/$abi/vmlinux" ]]
+[[ -L "$debug/System/Kernel/Debug/InfiltratorOS-$version/boot/vmlinux-$abi" ]]
 [[ ! -e "$debug/lib" && ! -e "$debug/usr" && ! -e "$debug/boot" ]]
 
 # Unset native mode must retain the original Linux Kbuild payload contract.

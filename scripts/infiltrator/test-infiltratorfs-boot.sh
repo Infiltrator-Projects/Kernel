@@ -7,7 +7,7 @@ fail() { printf 'InfiltratorOS three-way trial: ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf 'InfiltratorOS three-way trial: %s\n' "$*" >&2; }
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 version=$(tr -d '\r\n' < "$root/VERSION")
-[[ "$version" == 0.1.1 ]] || fail 'Only InfiltratorOS Kernel 0.1.1 is qualified'
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Invalid native Kernel VERSION'
 source= objects= stage= workspace= jobs=2 install_deps=0
 while (( $# )); do
   case "$1" in

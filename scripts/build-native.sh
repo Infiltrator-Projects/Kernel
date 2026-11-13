@@ -195,15 +195,22 @@ native_modprobe="/System/Kernel/Runtime/InfiltratorOS-$product_version/modprobe"
 # owned in Filesystem-* repositories.  Retain FAT/EXT and shared VFS, but
 # exclude the non-boot duplicates from both vmlinux and built .ko outputs.
 python3 "$root/scripts/infiltrator/prune-external-filesystems.py" apply "$obj/.config"
-# The root device and EXT4 must be reachable before native modules on disk.
+# A direct GPT/NVMe EXT4 root must be reachable before loading any native
+# modules. Some laptops expose their NVMe controller through Intel VMD.
+# devtmpfs must also be mounted for userspace on the direct boot path.
 "$source_dir/scripts/config" --file "$obj/.config" \
-  --enable EXT4_FS --enable BLK_DEV_NVME
+  --enable EXT4_FS --enable BLK_DEV_NVME --enable PCI_MSI --enable VMD \
+  --enable DEVTMPFS --enable DEVTMPFS_MOUNT
 log "Configuring host baseline with independently owned non-boot filesystems excluded"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
 grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config" ||
   fail 'EXT4 root filesystem support must be built into the native kernel'
 grep -Fqx 'CONFIG_BLK_DEV_NVME=y' "$obj/.config" ||
   fail 'NVMe root device support must be built into the native kernel'
+grep -Fqx 'CONFIG_VMD=y' "$obj/.config" ||
+  fail 'Intel VMD support must be built in for NVMe root devices behind VMD'
+grep -Fqx 'CONFIG_DEVTMPFS_MOUNT=y' "$obj/.config" ||
+  fail 'devtmpfs must mount automatically on the direct native boot path'
 if grep -Eq '^CONFIG_(FUSE_FS|CUSE|VIRTIO_FS|FUSE_DAX|FUSE_PASSTHROUGH|FUSE_IO_URING)=[ym]$' "$obj/.config"; then
   fail 'Filesystem FUSE is prohibited in the native kernel configuration'
 fi
