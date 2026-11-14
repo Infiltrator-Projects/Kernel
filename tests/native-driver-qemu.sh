@@ -80,7 +80,8 @@ if ! timeout 90 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 512 \
     -netdev user,id=net0,restrict=on -device e1000e,netdev=net0 \
     -kernel "$kernel" -initrd "$work/initramfs.gz" \
     -append 'console=ttyS0 rdinit=/init panic=1' ||
-    ! grep -Fxq 'NATIVE_DRIVER_AUTOLOAD_PASS' "$work/serial.log"; then
+    ! awk '{ sub(/\r$/, ""); if ($0 == "NATIVE_DRIVER_AUTOLOAD_PASS") found=1 }
+           END { exit !found }' "$work/serial.log"; then
     tail -n 100 "$work/serial.log" >&2
     exit 1
 fi
