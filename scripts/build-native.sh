@@ -225,6 +225,8 @@ python3 "$root/scripts/infiltrator/prune-external-filesystems.py" apply "$obj/.c
   --enable EXT4_FS --enable BLK_DEV_NVME --enable PCI_MSI --enable VMD \
   --enable SCSI --enable BLK_DEV_SD --enable ATA --enable SATA_AHCI \
   --enable VIRTIO --enable VIRTIO_PCI --enable VIRTIO_BLK \
+  --disable FUSE_FS --disable CUSE --disable VIRTIO_FS --disable FUSE_DAX \
+  --disable FUSE_PASSTHROUGH --disable FUSE_IO_URING \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT
 log "Configuring host baseline with independently owned non-boot filesystems excluded"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
