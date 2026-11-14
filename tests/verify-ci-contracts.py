@@ -39,6 +39,7 @@ def main() -> None:
     )
     assert "python3 tests/verify-ci-contracts.py" in integration
     for required in ("tests/boot-ext4-root.sh", "tests/native-driver-qemu.sh",
+                     "tests/native-dell-driver-aliases.sh",
                      "tests/firmware-ext4.sh", "infiltrator-filesystem-ext4.deb",
                      "infiltrator-boot.deb"):
         assert required in integration, f"Native release qualification is missing {required}"

@@ -42,6 +42,7 @@ jobs:
           test -s /usr/share/OVMF/OVMF_CODE_4M.fd
           test -s /usr/share/OVMF/OVMF_VARS_4M.fd
           bash -n tests/native-driver-qemu.sh
+          bash -n tests/native-dell-driver-aliases.sh
           bash tests/host-driver-check.sh
           bash tests/native-contract.sh
 
@@ -61,6 +62,8 @@ jobs:
             -e EFI -e EFI_STUB -e PCI -e PCI_MSI -e VMD -e VIRTIO \
             -e VIRTIO_PCI -e VIRTIO_BLK \
             -e MODULES -e NETDEVICES -e ETHERNET -e NET_VENDOR_INTEL -m DUMMY -m E1000E \
+            -e WLAN -e WLAN_VENDOR_INTEL -m CFG80211 -m MAC80211 -m IWLWIFI -m IWLMVM \
+            -e I2C -m I2C_HID -m I2C_HID_ACPI -m MFD_INTEL_LPSS_PCI \
             -e INPUT -e HID -m HID_GENERIC -e USB -e USB_XHCI_HCD -e USB_XHCI_PCI -m USB_HID \
             -e SOUND -e SND -e SND_PCI -m SND_HDA_INTEL \
             -e FW_LOADER -m TEST_FIRMWARE \
@@ -89,6 +92,10 @@ jobs:
           grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
           grep -Fqx 'CONFIG_DUMMY=m' "$obj/.config"
           grep -Fqx 'CONFIG_E1000E=m' "$obj/.config"
+          grep -Fqx 'CONFIG_IWLWIFI=m' "$obj/.config"
+          grep -Fqx 'CONFIG_IWLMVM=m' "$obj/.config"
+          grep -Fqx 'CONFIG_I2C_HID_ACPI=m' "$obj/.config"
+          grep -Fqx 'CONFIG_MFD_INTEL_LPSS_PCI=m' "$obj/.config"
           grep -Fqx 'CONFIG_USB_HID=m' "$obj/.config"
           grep -Fqx 'CONFIG_HID_GENERIC=m' "$obj/.config"
           grep -Fqx 'CONFIG_SND_HDA_INTEL=m' "$obj/.config"
@@ -141,6 +148,7 @@ jobs:
           ln -s "$scan/sys/module/e1000e" "$scan/sys/bus/pci/devices/nic/driver/module"
           bash "$install_root/System/Kernel/Runtime/InfiltratorOS-$NATIVE_RELEASE/verify-host-drivers" \
             "$stage/System/Kernel/Modules/InfiltratorOS-$NATIVE_RELEASE" "$scan/sys"
+          bash tests/native-dell-driver-aliases.sh "$stage/System/Kernel/Modules/InfiltratorOS-$NATIVE_RELEASE"
           echo "NATIVE_STAGE=$stage" >> "$GITHUB_ENV"
           echo "NATIVE_OBJECTS=$obj" >> "$GITHUB_ENV"
           echo 'NATIVE_KERNEL_STAGE_PASS'
