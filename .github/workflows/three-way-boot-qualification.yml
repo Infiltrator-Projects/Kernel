@@ -152,6 +152,31 @@ jobs:
           bash tests/native-driver-qemu.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
             "$NATIVE_STAGE" "$RUNNER_TEMP/InfiltratorOS/Tests" "$source"
 
+      # This independently tests the V2 firmware bridge using the same real
+      # InfiltratorOS kernel compiled above. The older persistence test below
+      # still needs the legacy Linux VFS module and is not V2-only proof.
+      - name: Fetch the pinned InfiltratorFS V2 provider
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Infiltrator-Projects/InfiltratorFS
+          ref: 76e4fbb4d70dfd30d140cb2216d7ac0748a254bf
+          path: v2-filesystem-source
+          submodules: recursive
+
+      - name: Boot the compiled InfiltratorOS kernel through the V2 shared object
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/InfiltratorOS/Tests/V2-Firmware"
+          mkdir -p "$work/package"
+          package="$work/infiltrator-boot.deb"
+          curl -fsSL --retry 3 -o "$package" https://github.com/Infiltrator-Projects/Boot/releases/download/v0.1.50/infiltrator-boot_0.1.50_amd64.deb
+          printf '%s  %s\n' a4acd0bec605d0680f173f537e8f8a818b9b071cfc5c356e0fc5eaf0dfcb86e7 "$package" | sha256sum -c -
+          dpkg-deb -x "$package" "$work/package"
+          bash v2-filesystem-source/tests/common-v2-uefi.sh \
+            "$work/package/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI" \
+            "$NATIVE_OBJECTS/arch/x86/boot/bzImage" "$work/vm"
+
       - name: Boot from InfiltratorFS using real Boot EFI and real Kernel
         shell: bash
         timeout-minutes: 35
@@ -189,6 +214,7 @@ jobs:
             ${{ runner.temp }}/Kernel-build.log
             ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-EXT4.*/serial*.log
             ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-Drivers.*/serial*.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/V2-Firmware/vm/serial.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/UEFI-build.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/CMake.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/FilesystemBuild.log
