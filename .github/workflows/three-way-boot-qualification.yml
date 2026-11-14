@@ -79,9 +79,10 @@ jobs:
             --set-str MODPROBE_PATH "/System/Kernel/Runtime/InfiltratorOS-$release/modprobe" \
             -d DEBUG_INFO_NONE -e DEBUG_INFO_DWARF4 -e DEBUG_INFO_REDUCED -d DEBUG_INFO_BTF
           # Same filesystem exclusions as the native Mint/Debian builder.
-          python3 scripts/infiltrator/prune-external-filesystems.py apply "$obj/.config"
+          cc -std=c11 -O2 -Wall -Wextra -Werror scripts/infiltrator/prune-external-filesystems.c -o "$obj/infiltrator-prune-filesystems"
+          "$obj/infiltrator-prune-filesystems" apply "$obj/.config"
           make O="$obj" KERNELRELEASE="$release" olddefconfig
-          python3 scripts/infiltrator/prune-external-filesystems.py check "$obj/.config"
+          "$obj/infiltrator-prune-filesystems" check "$obj/.config"
           make O="$obj" KERNELRELEASE="$release" prepare
           grep -Fqx 'CONFIG_EFI_STUB=y' "$obj/.config"
           grep -Fqx 'CONFIG_VIRTIO_PCI=y' "$obj/.config"

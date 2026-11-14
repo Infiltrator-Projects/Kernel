@@ -70,9 +70,10 @@ jobs:
           # EXT2 is explicitly tested as an external native-ABI module.
           # Suppress all other independently owned non-boot filesystems too,
           # otherwise this separate test recompiles their generic in-tree VFS.
-          python3 scripts/infiltrator/prune-external-filesystems.py apply "$obj/.config"
+          cc -std=c11 -O2 -Wall -Wextra -Werror scripts/infiltrator/prune-external-filesystems.c -o "$obj/infiltrator-prune-filesystems"
+          "$obj/infiltrator-prune-filesystems" apply "$obj/.config"
           make O="$obj" KERNELRELEASE="$NATIVE_RELEASE" olddefconfig
-          python3 scripts/infiltrator/prune-external-filesystems.py check "$obj/.config"
+          "$obj/infiltrator-prune-filesystems" check "$obj/.config"
           grep -Fqx '# CONFIG_EXT2_FS is not set' "$obj/.config"
           grep -Fqx '# CONFIG_EXT4_USE_FOR_EXT2 is not set' "$obj/.config" || \
             ! grep -Fqx 'CONFIG_EXT4_USE_FOR_EXT2=y' "$obj/.config"
