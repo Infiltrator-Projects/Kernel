@@ -26,7 +26,7 @@ def main() -> None:
                     f"reference {match['ref']!r}"
                 )
 
-    integration = (WORKFLOWS / "three-way-boot-qualification.yml").read_text()
+    integration = (WORKFLOWS / "native-ext4-driver-qualification.yml").read_text()
     try:
         push = integration.split("on:\n  push:\n", 1)[1].split(
             "  workflow_dispatch:", 1
@@ -35,9 +35,18 @@ def main() -> None:
         raise AssertionError("Kernel integration workflow must run on push") from exc
     assert "branches: [main]" in push, "Kernel integration main trigger missing"
     assert "paths:" not in push and "paths-ignore:" not in push, (
-        "The three-way native boot test must not silently skip ordinary Kernel changes"
+        "The EXT4 boot and driver test must not silently skip ordinary Kernel changes"
     )
     assert "python3 tests/verify-ci-contracts.py" in integration
+    for required in ("tests/boot-ext4-root.sh", "tests/native-driver-qemu.sh",
+                     "tests/firmware-ext4.sh", "infiltrator-filesystem-ext4.deb",
+                     "infiltrator-boot.deb"):
+        assert required in integration, f"Native release qualification is missing {required}"
+    release = (WORKFLOWS / "release-run.yml").read_text()
+    assert '"Native EXT4 boot and driver qualification"' in release
+    assert "--prerelease" in release, "Physical hardware has not yet been qualified"
+    assert "Qualify independent EXT2 against InfiltratorOS Kernel" not in release
+    assert "Three-way Boot + InfiltratorFS + Kernel VM qualification" not in release
     print("KERNEL_CI_CONTRACT_PASS: immutable actions, full main integration coverage")
 
 

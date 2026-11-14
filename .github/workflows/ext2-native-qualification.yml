@@ -4,8 +4,6 @@
 name: Qualify independent EXT2 against InfiltratorOS Kernel
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

@@ -5,8 +5,6 @@
 name: Three-way Boot + InfiltratorFS + Kernel VM qualification
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

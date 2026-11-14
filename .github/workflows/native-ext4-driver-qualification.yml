@@ -1,0 +1,205 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Compile the real kernel, exercise native driver loading, and boot the
+# released EXT4 V2 filesystem module with the normal BOOT application.
+name: Native EXT4 boot and driver qualification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ext4-drivers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-ext4-drivers:
+    name: EXT4 boot and native hardware drivers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - name: Checkout full InfiltratorOS kernel sources
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Install isolated VM, kernel and native filesystem build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/verify-ci-contracts.py
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
+            dwarves cpio rsync kmod libkmod-dev busybox-static qemu-system-x86 qemu-utils \
+            ovmf dosfstools mtools gnu-efi cmake pkg-config python3 git wget \
+            file zstd liblz4-dev e2fsprogs gdisk debhelper libdw-dev iproute2 curl udev
+          df -h .
+          command -v qemu-system-x86_64
+          test -s /usr/share/OVMF/OVMF_CODE_4M.fd
+          test -s /usr/share/OVMF/OVMF_VARS_4M.fd
+          bash -n tests/native-driver-qemu.sh
+          bash tests/host-driver-check.sh
+          bash tests/native-contract.sh
+
+      - name: Configure native kernel ABI and minimum QEMU boot hardware
+        shell: bash
+        run: |
+          set -euo pipefail
+          release=$(<VERSION)
+          [[ $release =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "NATIVE_RELEASE=$release" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/InfiltratorOS/Build/obj"
+          obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
+          make O="$obj" x86_64_defconfig
+          # Built-in storage devices are essential before root userspace
+          # can load any optional filesystem module from the initramfs.
+          scripts/config --file "$obj/.config" \
+            -e EFI -e EFI_STUB -e PCI -e PCI_MSI -e VMD -e VIRTIO \
+            -e VIRTIO_PCI -e VIRTIO_BLK \
+            -e MODULES -e NETDEVICES -e ETHERNET -e NET_VENDOR_INTEL -m DUMMY -m E1000E \
+            -e INPUT -e HID -m HID_GENERIC -e USB -e USB_XHCI_HCD -e USB_XHCI_PCI -m USB_HID \
+            -e SOUND -e SND -e SND_PCI -m SND_HDA_INTEL \
+            -e FW_LOADER -m TEST_FIRMWARE \
+            -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
+            -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
+            -e RD_GZIP -e BLK_DEV -e BLK_DEV_NVME -e EXT4_FS \
+            -e DAMON -e DAMON_VADDR -e DAMON_PADDR -e DAMON_SYSFS -e DAMON_RECLAIM -e DAMON_LRU_SORT \
+            -d MODULE_SIG -d SYSTEM_TRUSTED_KEYRING \
+            -d 9P_FS -d NET_9P \
+            --set-str SYSTEM_TRUSTED_KEYS '' \
+            --set-str SYSTEM_REVOCATION_KEYS '' \
+            --set-str MODPROBE_PATH "/System/Kernel/Runtime/InfiltratorOS-$release/modprobe" \
+            -d DEBUG_INFO_NONE -e DEBUG_INFO_DWARF4 -e DEBUG_INFO_REDUCED -d DEBUG_INFO_BTF
+          # Same filesystem exclusions as the native Mint/Debian builder.
+          python3 scripts/infiltrator/prune-external-filesystems.py apply "$obj/.config"
+          make O="$obj" KERNELRELEASE="$release" olddefconfig
+          python3 scripts/infiltrator/prune-external-filesystems.py check "$obj/.config"
+          make O="$obj" KERNELRELEASE="$release" prepare
+          grep -Fqx 'CONFIG_EFI_STUB=y' "$obj/.config"
+          grep -Fqx 'CONFIG_VIRTIO_PCI=y' "$obj/.config"
+          grep -Fqx 'CONFIG_VIRTIO_BLK=y' "$obj/.config"
+          grep -Fqx 'CONFIG_BLK_DEV_NVME=y' "$obj/.config"
+          grep -Fqx 'CONFIG_VMD=y' "$obj/.config"
+          grep -Fqx 'CONFIG_DEVTMPFS_MOUNT=y' "$obj/.config"
+          grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config"
+          grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
+          grep -Fqx 'CONFIG_DUMMY=m' "$obj/.config"
+          grep -Fqx 'CONFIG_E1000E=m' "$obj/.config"
+          grep -Fqx 'CONFIG_USB_HID=m' "$obj/.config"
+          grep -Fqx 'CONFIG_HID_GENERIC=m' "$obj/.config"
+          grep -Fqx 'CONFIG_SND_HDA_INTEL=m' "$obj/.config"
+          grep -Fqx 'CONFIG_TEST_FIRMWARE=m' "$obj/.config"
+          grep -Fqx 'CONFIG_DEBUG_INFO=y' "$obj/.config"
+          grep -Fqx 'CONFIG_DAMON=y' "$obj/.config"
+          grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"
+          grep -Fqx 'CONFIG_DEVTMPFS=y' "$obj/.config"
+          grep -Fqx 'CONFIG_SERIAL_8250_CONSOLE=y' "$obj/.config"
+          bash scripts/infiltrator/verify-module-helper.sh "$obj" "$release"
+          test "$(cat "$obj/include/config/kernel.release")" = "$release"
+
+      - name: Compile and package the real InfiltratorOS kernel with bindeb-pkg
+        shell: bash
+        timeout-minutes: 65
+        run: |
+          set -euo pipefail
+          obj="$RUNNER_TEMP/InfiltratorOS/Build/obj"
+          export INFILTRATOROS_NATIVE_PACKAGE=1 INFILTRATOROS_KERNEL_VERSION="$NATIVE_RELEASE"
+          # Exercise the same packaging entry point as the public installer.
+          make O="$obj" KERNELRELEASE="$NATIVE_RELEASE" \
+            -j 4 bindeb-pkg > "$RUNNER_TEMP/Kernel-build.log" 2>&1 || {
+            tail -n 130 "$RUNNER_TEMP/Kernel-build.log" >&2
+            exit 1
+          }
+          test -s "$obj/arch/x86/boot/bzImage"
+          grep -Fqx "#define UTS_RELEASE \"$NATIVE_RELEASE\"" "$obj/include/generated/utsrelease.h"
+          echo 'REAL_INFILTRATOROS_KERNEL_COMPILE_PASS'
+
+      - name: Stage the packaged kernel and verify installation in an isolated root
+        shell: bash
+        run: |
+          set -euo pipefail
+          export INFILTRATOROS_TEMP_ROOT="$RUNNER_TEMP/InfiltratorOS"
+          obj="$INFILTRATOROS_TEMP_ROOT/Build/obj"
+          packages="$(dirname "$obj")"
+          stage="$INFILTRATOROS_TEMP_ROOT/Staging/ThreeWay"
+          install_root="$INFILTRATOROS_TEMP_ROOT/Tests/PackageInstall"
+          mkdir -p "$INFILTRATOROS_TEMP_ROOT/Kernel" "$install_root"
+          (cd "$packages" && sha256sum ./*.deb > "SHA256SUMS-InfiltratorOS-Kernel-$NATIVE_RELEASE.txt")
+          bash scripts/infiltrator/stage-native.sh --objects "$obj" --packages "$packages" --output "$stage"
+          bash scripts/infiltrator/install-native.sh --packages "$packages" --install-root "$install_root"
+          cmp "$obj/arch/x86/boot/bzImage" "$install_root/System/Kernel/Images/InfiltratorOS-$NATIVE_RELEASE.img"
+          cmp scripts/infiltrator/verify-host-drivers.sh \
+            "$install_root/System/Kernel/Runtime/InfiltratorOS-$NATIVE_RELEASE/verify-host-drivers"
+          # Check the complete real package index and a synthetic bound NIC
+          # using the same pre-install guard as the end-user downloader.
+          scan="$INFILTRATOROS_TEMP_ROOT/Tests/HostDriverScan"
+          mkdir -p "$scan/sys/bus/pci/devices/nic/driver" "$scan/sys/module/e1000e"
+          ln -s "$scan/sys/module/e1000e" "$scan/sys/bus/pci/devices/nic/driver/module"
+          bash "$install_root/System/Kernel/Runtime/InfiltratorOS-$NATIVE_RELEASE/verify-host-drivers" \
+            "$stage/System/Kernel/Modules/InfiltratorOS-$NATIVE_RELEASE" "$scan/sys"
+          echo "NATIVE_STAGE=$stage" >> "$GITHUB_ENV"
+          echo "NATIVE_OBJECTS=$obj" >> "$GITHUB_ENV"
+          echo 'NATIVE_KERNEL_STAGE_PASS'
+
+      - name: Mount an NVMe EXT4 root with the compiled kernel
+        shell: bash
+        run: |
+          bash tests/boot-ext4-root.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
+            "$RUNNER_TEMP/InfiltratorOS/Tests"
+
+      - name: Automatically load network, input and audio drivers from native modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/load-native-driver.c"
+          rule="$RUNNER_TEMP/81-infiltratoros-drivers.rules"
+          curl -fsSL --retry 3 -o "$source" https://raw.githubusercontent.com/Infiltrator-Projects/InfiltratorOS/7922e3c647b0cb353bd6b1844475cf8f425088e7/packaging/load-native-driver.c
+          curl -fsSL --retry 3 -o "$rule" https://raw.githubusercontent.com/Infiltrator-Projects/InfiltratorOS/7922e3c647b0cb353bd6b1844475cf8f425088e7/packaging/81-infiltratoros-drivers.rules
+          printf '%s  %s\n' a534d879ffa35ee6e6b07052fa382d1bac2f0104b9bdb4d612f2ad8dee9a906a "$source" | sha256sum -c -
+          printf '%s  %s\n' e1fbcd3a50b4ef20fc1a60515650b0af2bc19dfdea026d26f1ec1366acb5a70f "$rule" | sha256sum -c -
+          bash tests/native-driver-qemu.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
+            "$NATIVE_STAGE" "$RUNNER_TEMP/InfiltratorOS/Tests" "$source" "$rule"
+
+      - name: Fetch the pinned EXT4 boot qualification
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Infiltrator-Projects/Filesystem-EXT4
+          ref: a42ed0d7a783804b3500320d39583aed49f460dc
+          path: ext4-filesystem-source
+
+      - name: Boot the compiled kernel through the deployed EXT4 shared object
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/InfiltratorOS/Tests/EXT4-Firmware"
+          mkdir -p "$work/package"
+          package="$work/infiltrator-filesystem-ext4.deb"
+          curl -fsSL --retry 3 -o "$package" https://github.com/Infiltrator-Projects/Filesystem-EXT4/releases/download/v1.0.11/infiltrator-filesystem-ext4_1.0.11_amd64.deb
+          printf '%s  %s\n' 322ab7363e88ac5c6a53d3f2d9778391c08a0ba69814a7aa4e157fbe7926d9f2 "$package" | sha256sum -c -
+          dpkg-deb -x "$package" "$work/package"
+          boot_package="$work/infiltrator-boot.deb"
+          curl -fsSL --retry 3 -o "$boot_package" https://github.com/Infiltrator-Projects/Boot/releases/download/v0.1.50/infiltrator-boot_0.1.50_amd64.deb
+          printf '%s  %s\n' a4acd0bec605d0680f173f537e8f8a818b9b071cfc5c356e0fc5eaf0dfcb86e7 "$boot_package" | sha256sum -c -
+          dpkg-deb -x "$boot_package" "$work/package"
+          boot="$work/package/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI"
+          so="$work/package/System/Filesystems/EXT4.so"
+          kernel="$NATIVE_OBJECTS/arch/x86/boot/bzImage"
+          bash ext4-filesystem-source/tests/firmware-ext4.sh "$boot" "$so" "$kernel" "$work/clean"
+          bash ext4-filesystem-source/tests/firmware-ext4.sh "$boot" "$so" "$kernel" "$work/recovery" needs-recovery
+
+      - name: Preserve kernel and VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Native-EXT4-Boot-Drivers-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/Kernel-build.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-EXT4.*/serial*.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-Drivers.*/serial*.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/EXT4-Firmware/*/serial.log
+          if-no-files-found: warn
+          retention-days: 30

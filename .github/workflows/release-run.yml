@@ -1,12 +1,11 @@
 name: Publish small InfiltratorOS Kernel downloader .run
 
-# The release must correspond to the exact source of BOTH successful real
-# VM qualifications, not merely to a successful lightweight packaging job.
+# The release must correspond to an exact-source real EXT4 and driver VM
+# qualification, not merely to a successful lightweight packaging job.
 on:
   workflow_run:
     workflows:
-      - "Three-way Boot + InfiltratorFS + Kernel VM qualification"
-      - "Qualify independent EXT2 against InfiltratorOS Kernel"
+      - "Native EXT4 boot and driver qualification"
     types: [completed]
 
 permissions:
@@ -22,7 +21,7 @@ jobs:
     if: github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     steps:
-      - name: Gate release on both exact-source successful QEMU qualifications
+      - name: Gate release on exact-source EXT4 and driver QEMU qualification
         env:
           GH_TOKEN: ${{ github.token }}
           QUALIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -35,7 +34,7 @@ jobs:
             exit 0
           fi
           runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$QUALIFIED_SHA&per_page=100")"
-          for workflow in             'Three-way Boot + InfiltratorFS + Kernel VM qualification'             'Qualify independent EXT2 against InfiltratorOS Kernel'; do
+          for workflow in 'Native EXT4 boot and driver qualification'; do
             state="$(jq -r --arg name "$workflow" '
               [.workflow_runs[] | select(.name == $name)]
               | sort_by(.created_at, .id) | last
@@ -47,7 +46,7 @@ jobs:
           done
           echo "READY=true" >> "$GITHUB_ENV"
           echo "QUALIFIED_SHA=$QUALIFIED_SHA" >> "$GITHUB_ENV"
-          echo "Both native QEMU qualifications passed for $QUALIFIED_SHA"
+          echo "Native EXT4 and driver QEMU qualification passed for $QUALIFIED_SHA"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v4
         if: env.READY == 'true'
         with:
@@ -80,9 +79,6 @@ jobs:
           bash tests/install-native.sh
           bash tests/host-driver-check.sh
           bash tests/module-runtime.sh
-          bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
-          python3 -m py_compile tests/infiltratorfs-native-boot.py tests/infiltratoros-native-payload.py
-          bash scripts/infiltrator/test-infiltratorfs-boot.sh --help | grep -Fq 'Format 0.19 InfiltratorFS'
       - name: Package tiny GitHub source downloader (no kernel compile)
         if: env.READY == 'true'
         shell: bash
@@ -151,7 +147,7 @@ jobs:
             gh release create "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" \
               --target "$QUALIFIED_SHA" --prerelease \
               --title "InfiltratorOS Kernel $version — qualified native downloader" \
-              --notes "Kernel and module ABI $version (uname -r, no additional suffix); upstream Linux source 7.0.14. Both QEMU/OVMF native Boot → InfiltratorFS → Kernel and independent EXT2 two-boot qualifications passed for this exact Kernel commit. The small .run installer fetches pinned GitHub source, compiles locally, and keeps the normal Mint /boot, EFI and NVRAM intact. Physical hardware remains unqualified."
+              --notes "Kernel and module ABI $version (uname -r, no additional suffix); upstream Linux source 7.0.14. QEMU qualified native driver loading, direct EXT4 root and BOOT using the EXT4 V2 shared object for this exact Kernel commit. The small .run installer fetches pinned GitHub source, compiles locally, and keeps the normal Mint /boot, EFI and NVRAM intact. Physical hardware remains unqualified."
           fi
           downloaded="$RUNNER_TEMP/Kernel-published-release"
           mkdir -p "$downloaded"
