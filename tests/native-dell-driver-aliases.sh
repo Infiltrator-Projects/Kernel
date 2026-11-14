@@ -24,9 +24,9 @@ check_alias() {
 }
 
 check_alias iwlwifi 'pci:v00008086d00007E40sv00008086sd00004090bc02sc80i00'
-check_alias intel_lpss_pci 'pci:v00008086d00007E78sv00001028sd00000CB9bc0Csc80i00'
-check_alias intel_lpss_pci 'pci:v00008086d00007E7Bsv00001028sd00000CB9bc0Csc80i00'
-check_alias snd_hda_intel 'pci:v00008086d00007E28sv00001028sd00000CB9bc04sc03i00'
+check_alias intel-lpss-pci 'pci:v00008086d00007E78sv00001028sd00000CB9bc0Csc80i00'
+check_alias intel-lpss-pci 'pci:v00008086d00007E7Bsv00001028sd00000CB9bc0Csc80i00'
+check_alias snd-hda-intel 'pci:v00008086d00007E28sv00001028sd00000CB9bc04sc03i00'
 check_alias e1000e 'pci:v00008086d0000550Asv00001028sd00000CB9bc02sc00i00'
 # The ACPI HID transport is representative; the laptop-specific touchpad
 # binding and actual input operation still require a physical test.
