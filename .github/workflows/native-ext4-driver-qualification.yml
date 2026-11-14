@@ -13,7 +13,9 @@ permissions:
 
 concurrency:
   group: native-ext4-drivers-${{ github.ref }}
-  cancel-in-progress: false
+  # Only the current main commit can be released. Superseded full kernel
+  # builds must not hold the runner while the replacement waits for hours.
+  cancel-in-progress: true
 
 jobs:
   native-ext4-drivers:
