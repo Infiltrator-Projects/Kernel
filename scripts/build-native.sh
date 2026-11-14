@@ -64,7 +64,7 @@ if (( ! skip_deps )); then
   sudo apt-get install -y --no-install-recommends build-essential bc bison flex fakeroot dwarves libdw-dev libelf-dev libssl-dev rsync dpkg-dev debhelper kmod libkmod-dev
   sudo apt-get build-dep -y "$pkg"
 fi
-for tool in make gcc dpkg-deb sha256sum python3; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
+for tool in make gcc dpkg-deb sha256sum; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
 if [[ "$mode" == --build-only ]]; then
   for tool in dpkg-buildpackage dh_listpackages depmod; do
     command -v "$tool" >/dev/null || fail "Missing packaging utility: $tool (install build dependencies before retrying)"
@@ -217,7 +217,9 @@ native_modprobe="/System/Kernel/Runtime/InfiltratorOS-$product_version/modprobe"
 # Distro configs enable filesystem VFS drivers which are now independently
 # owned in Filesystem-* repositories.  Retain FAT/EXT and shared VFS, but
 # exclude the non-boot duplicates from both vmlinux and built .ko outputs.
-python3 "$root/scripts/infiltrator/prune-external-filesystems.py" apply "$obj/.config"
+gcc -std=c11 -O2 -Wall -Wextra -Werror \
+  "$root/scripts/infiltrator/prune-external-filesystems.c" -o "$obj/infiltrator-prune-filesystems"
+"$obj/infiltrator-prune-filesystems" apply "$obj/.config"
 # A direct GPT/NVMe EXT4 root must be reachable before loading any native
 # modules. Some laptops expose their NVMe controller through Intel VMD.
 # devtmpfs must also be mounted for userspace on the direct boot path.
@@ -243,7 +245,7 @@ if grep -Eq '^CONFIG_(FUSE_FS|CUSE|VIRTIO_FS|FUSE_DAX|FUSE_PASSTHROUGH|FUSE_IO_U
 fi
 # Kconfig can re-enable an option through selects/defaults.  Fail closed if
 # any retired driver survives effective olddefconfig reconciliation.
-python3 "$root/scripts/infiltrator/prune-external-filesystems.py" check "$obj/.config"
+"$obj/infiltrator-prune-filesystems" check "$obj/.config"
 # A fresh kernel make is required at every stage: the outer `make build-only`
 # exports sub_make_done=1, which suppresses Kbuild's first-pass O= parsing.
 # The run-kbuild helper clears this inherited marker so our object directory
