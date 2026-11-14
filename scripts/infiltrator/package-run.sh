@@ -34,7 +34,7 @@ fail() { printf 'InfiltratorOS Kernel .run: ERROR: %s\n' "$*" >&2; exit 1; }
 repo='https://github.com/Infiltrator-Projects/Kernel.git'
 expected_commit=__PINNED_COMMIT__
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
-  printf 'Usage: %s [--build-only] [--jobs N] [--install-deps] [--replace-existing] [--system-package-mode] [--trial-infiltratorfs]\n' "$0"
+  printf 'Usage: %s [--build-only] [--jobs N] [--install-deps] [--replace-existing] [--system-package-mode]\n' "$0"
   echo 'Downloads the exact release source from GitHub into /Temporary/InfiltratorOS/Kernel.'
   echo 'Freshly compiles on THIS machine, verifies actual native Debian package paths,'
   echo 'and installs files under /System/Kernel (not under Mint /boot).'
@@ -42,14 +42,11 @@ if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
   echo '--build-only: download, compile and verify without native file installation.'
   echo '--install-deps: allow APT installation of missing build prerequisites.'
   echo '--replace-existing: archive and replace previously installed same-version native Kernel files.'
-  echo '--trial-infiltratorfs: run isolated Boot -> InfiltratorFS -> real Kernel -> native filesystem mount/read/write QEMU qualification.'
-  echo 'Trial needs QEMU, OVMF, gnu-efi, mtools, dosfstools, busybox-static, zstd and filesystem build dependencies.'
   exit 0
 fi
 build_only=0
 install_deps=0
 replace_existing=0
-trial_infiltratorfs=0
 system_package_mode=0
 jobs=
 while (( $# )); do
@@ -58,7 +55,6 @@ while (( $# )); do
     --install-deps) install_deps=1 ;;
     --replace-existing) replace_existing=1 ;;
     --system-package-mode) system_package_mode=1 ;;
-    --trial-infiltratorfs) trial_infiltratorfs=1 ;;
     --jobs)
       shift; (( $# )) || fail '--jobs requires a number'
       [[ "$1" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid --jobs value'
@@ -165,17 +161,6 @@ if [[ -n "$jobs" ]]; then args+=(--jobs "$jobs"); fi
   fail "Native staging failed; see $logfile"
 ( cd "$stage" && sha256sum --quiet -c SHA256SUMS.txt ) ||
   fail "Native staged output checksum failure; see $logfile"
-if (( trial_infiltratorfs )); then
-  mkdir -p "$workspace/Tests" ||
-    fail 'Cannot create isolated three-way trial evidence directory'
-  printf 'Running actual Boot -> InfiltratorFS -> InfiltratorOS Kernel trial in QEMU\n'
-  trial_args=(--source "$source_dir" --objects "$obj" --stage "$stage" --workspace "$workspace/Tests")
-  if [[ -n "$jobs" ]]; then trial_args+=(--jobs "$jobs"); fi
-  if (( install_deps )); then trial_args+=(--install-deps); fi
-  ( cd "$source_dir" && bash scripts/infiltrator/test-infiltratorfs-boot.sh
-    "${trial_args[@]}" ) 2>&1 | tee -a "$logfile" ||
-    fail "Three-project QEMU trial failed; see logs under $workspace/Tests"
-fi
 if (( ! build_only )); then
   # Catch an omitted currently bound driver before installing a kernel that
   # BOOT could discover. This does not replace physical device testing.
@@ -210,31 +195,6 @@ if grep -Fq '__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__' "$tmp"; then
 fi
 chmod 755 "$tmp"
 mv -- "$tmp" "$outfile"
-# A second, equally lightweight asset is deliberately a TEST, never an install.
-# Clicking this .run starts the full image-only three-way QEMU qualification
-# with all flags preselected. The normal product .run is unchanged.
-trialfile="$out/InfiltratorOS-Kernel-$version-InfiltratorFS-Trial-amd64.run"
-[[ ! -e "$trialfile" && ! -L "$trialfile" ]] ||
-  fail "Existing trial .run preserved: $trialfile"
-trialtmp=$(mktemp "$out/.InfiltratorFS-Trial-$version.XXXXXXXX")
-trap 'rm -f -- "$trialtmp"' EXIT
-cp -- "$outfile" "$trialtmp"
-sed -i \
-  -e 's/^build_only=0$/build_only=1/' \
-  -e 's/^install_deps=0$/install_deps=1/' \
-  -e 's/^trial_infiltratorfs=0$/trial_infiltratorfs=1/' \
-  "$trialtmp"
-grep -Fxq 'build_only=1' "$trialtmp" ||
-  fail 'Trial launcher must not install or activate host kernel'
-grep -Fxq 'install_deps=1' "$trialtmp" ||
-  fail 'Trial launcher must include its QEMU/EFI dependencies'
-grep -Fxq 'trial_infiltratorfs=1' "$trialtmp" ||
-  fail 'Trial launcher must start InfiltratorFS boot test automatically'
-grep -Fxq "expected_commit=$commit" "$trialtmp" ||
-  fail 'Trial launcher source revision is not pinned'
-chmod 755 "$trialtmp"
-mv -- "$trialtmp" "$trialfile"
 trap - EXIT
 printf 'InfiltratorOS Kernel release: native installer .run: %s\n' "$outfile"
-printf 'InfiltratorOS Kernel release: isolated three-way trial .run: %s\n' "$trialfile"
-printf 'Both download source pinned to commit %s\n' "$commit"
+printf 'Source pinned to commit %s\n' "$commit"

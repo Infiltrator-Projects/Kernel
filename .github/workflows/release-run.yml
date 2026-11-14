@@ -95,14 +95,7 @@ jobs:
           version=$(tr -d '\r\n' < VERSION)
           out="$INFILTRATOROS_TEMP_ROOT/Kernel/Packages"
           installer="$out/InfiltratorOS-Kernel-$version-amd64.run"
-          trial="$out/InfiltratorOS-Kernel-$version-InfiltratorFS-Trial-amd64.run"
-          test -s "$installer" && test -s "$trial"
-          test "$(stat -c %s "$trial")" -lt 65536
-          bash -n "$trial"
-          grep -Fxq "expected_commit=$QUALIFIED_SHA" "$trial"
-          grep -Fxq 'build_only=1' "$trial"
-          grep -Fxq 'trial_infiltratorfs=1' "$trial"
-          grep -Fxq 'install_deps=1' "$trial"
+          test -s "$installer"
           # Prevent accidental return to 161 MB embedded-source design.
           test "$(stat -c %s "$installer")" -lt 65536
           bash -n "$installer"
@@ -111,16 +104,13 @@ jobs:
           grep -Fq 'Existing native Kernel' "$installer"
           grep -Fq 'fetch --no-tags --depth 1 origin "$expected_commit"' "$installer"
           bash "$installer" --help | grep -Fq '/System/Kernel'
-          bash "$installer" --help | grep -Fq -- '--trial-infiltratorfs'
           if grep -Fq '__INFILTRATOR_KERNEL_SOURCE_ARCHIVE_BELOW__' "$installer"; then
             echo 'ERROR: old embedded-source format detected'
             exit 1
           fi
-          (cd "$out" && sha256sum "InfiltratorOS-Kernel-$version-amd64.run" "InfiltratorOS-Kernel-$version-InfiltratorFS-Trial-amd64.run" > SHA256SUMS.txt)
+          (cd "$out" && sha256sum "InfiltratorOS-Kernel-$version-amd64.run" > SHA256SUMS.txt)
           (cd "$out" && sha256sum --quiet -c SHA256SUMS.txt)
           echo "RUN_PATH=$installer" >> "$GITHUB_ENV"
-          echo "TRIAL_PATH=$trial" >> "$GITHUB_ENV"
-          echo "TRIAL_SIZE=$(stat -c %s "$trial")" >> "$GITHUB_ENV"
           echo "SHA_PATH=$out/SHA256SUMS.txt" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
           echo "SIZE=$(stat -c %s "$installer")" >> "$GITHUB_ENV"
@@ -158,15 +148,15 @@ jobs:
               echo "Release tag already exists without an immutable release; refusing" >&2
               exit 1
             fi
-            gh release create "$RELEASE_TAG" "$RUN_PATH" "$TRIAL_PATH" "$SHA_PATH" \
+            gh release create "$RELEASE_TAG" "$RUN_PATH" "$SHA_PATH" \
               --target "$QUALIFIED_SHA" --prerelease \
               --title "InfiltratorOS Kernel $version — qualified native downloader" \
-              --notes "Kernel and module ABI $version (uname -r, no additional suffix); upstream Linux source 7.0.14. Both QEMU/OVMF native Boot → InfiltratorFS → Kernel and independent EXT2 two-boot qualifications passed for this exact Kernel commit. The two small .run files fetch pinned GitHub source, compile locally, and keep the normal Mint /boot, EFI and NVRAM intact. Physical hardware remains unqualified."
+              --notes "Kernel and module ABI $version (uname -r, no additional suffix); upstream Linux source 7.0.14. Both QEMU/OVMF native Boot → InfiltratorFS → Kernel and independent EXT2 two-boot qualifications passed for this exact Kernel commit. The small .run installer fetches pinned GitHub source, compiles locally, and keeps the normal Mint /boot, EFI and NVRAM intact. Physical hardware remains unqualified."
           fi
           downloaded="$RUNNER_TEMP/Kernel-published-release"
           mkdir -p "$downloaded"
           gh release download "$RELEASE_TAG" --dir "$downloaded"
           diff -qr "$out" "$downloaded"
           (cd "$downloaded" && sha256sum --quiet -c SHA256SUMS.txt)
-          test "$(find "$downloaded" -maxdepth 1 -type f | wc -l)" = 3
+          test "$(find "$downloaded" -maxdepth 1 -type f | wc -l)" = 2
           echo "PASS: immutable Kernel $version release at verified source $QUALIFIED_SHA"
