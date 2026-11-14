@@ -14,17 +14,23 @@ fail() { printf 'Kernel hardware check: ERROR: %s\n' "$*" >&2; exit 1; }
 # Kbuild's two text indexes cover loadable and built-in drivers. Normalize
 # kernel module names the same way kmod treats hyphens and underscores.
 declare -A provided=() active=()
-while IFS= read -r line || [[ -n $line ]]; do
-    path=${line%%:*}
-    name=${path##*/}
-    case "$name" in
-        *.ko|*.ko.gz|*.ko.xz|*.ko.zst)
-            name=${name%%.ko*}
-            name=${name//-/_}
-            [[ $name =~ ^[[:alnum:]_]+$ ]] || fail 'Malformed native driver index'
-            provided["$name"]=1 ;;
-    esac
-done < <(cat "$modules/modules.dep" "$modules/modules.builtin")
+for index in modules.dep modules.builtin; do
+    while IFS= read -r line || [[ -n $line ]]; do
+        path=${line%%:*}
+        name=${path##*/}
+        case "$name" in
+            *.ko|*.ko.gz|*.ko.xz|*.ko.zst)
+                case "$path" in /*|../*|*/../*|*/..) fail 'Unsafe native driver index path' ;; esac
+                if [[ $index == modules.dep && ! -f $modules/$path ]]; then
+                    fail "Native driver index references a missing file: $path"
+                fi
+                name=${name%%.ko*}
+                name=${name//-/_}
+                [[ $name =~ ^[[:alnum:]_]+$ ]] || fail 'Malformed native driver index'
+                provided["$name"]=1 ;;
+        esac
+    done < "$modules/$index"
+done
 
 # A module symlink is present only for devices bound to a modular or
 # registered built-in driver. Other buses and userspace-only devices are not
