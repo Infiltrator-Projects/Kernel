@@ -67,6 +67,8 @@ jobs:
             -e EFI -e EFI_STUB -e PCI -e PCI_MSI -e VMD -e VIRTIO \
             -e VIRTIO_PCI -e VIRTIO_BLK \
             -e MODULES -e NETDEVICES -e ETHERNET -e NET_VENDOR_INTEL -m DUMMY -m E1000E \
+            -e INPUT -e HID -m HID_GENERIC -e USB -e USB_XHCI_HCD -e USB_XHCI_PCI -m USB_HID \
+            -e SOUND -e SND -e SND_PCI -m SND_HDA_INTEL \
             -e FW_LOADER -m TEST_FIRMWARE \
             -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
@@ -93,6 +95,9 @@ jobs:
           grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
           grep -Fqx 'CONFIG_DUMMY=m' "$obj/.config"
           grep -Fqx 'CONFIG_E1000E=m' "$obj/.config"
+          grep -Fqx 'CONFIG_USB_HID=m' "$obj/.config"
+          grep -Fqx 'CONFIG_HID_GENERIC=m' "$obj/.config"
+          grep -Fqx 'CONFIG_SND_HDA_INTEL=m' "$obj/.config"
           grep -Fqx 'CONFIG_TEST_FIRMWARE=m' "$obj/.config"
           grep -Fqx 'CONFIG_DEBUG_INFO=y' "$obj/.config"
           grep -Fqx 'CONFIG_DAMON=y' "$obj/.config"
@@ -152,7 +157,7 @@ jobs:
           bash tests/boot-ext4-root.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
             "$RUNNER_TEMP/InfiltratorOS/Tests"
 
-      - name: Automatically load a native hardware driver without lib modules
+      - name: Automatically load network, input and audio drivers from native modules
         shell: bash
         run: |
           set -euo pipefail

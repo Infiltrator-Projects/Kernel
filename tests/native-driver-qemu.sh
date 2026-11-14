@@ -71,10 +71,33 @@ done
 test -n "$device"
 UDEVD_COMMAND --daemon
 UDEVADM_COMMAND control --ping
-UDEVADM_COMMAND trigger --action=add "$device"
+# Coldplug all devices so the real udev rules discover the NIC, USB HID
+# transport/tablet and Intel HDA controller by their respective aliases.
+UDEVADM_COMMAND trigger --action=add --type=devices
 UDEVADM_COMMAND settle --timeout=30
 test -d /sys/module/e1000e
 test -L "$device/driver"
+test -d /sys/module/usbhid
+test -d /sys/module/hid_generic
+test -d /sys/module/snd_hda_intel
+audio=
+for alias_file in /sys/bus/pci/devices/*/modalias; do
+    alias=$($b cat "$alias_file")
+    case "$alias" in
+        pci:v00008086d00002668*) audio=${alias_file%/modalias}; break ;;
+    esac
+done
+test -n "$audio"
+test -L "$audio/driver"
+# Check that a USB input device actually registered; merely loading the
+# module would not establish binding. Physical laptop operation is separate.
+usb_input=0
+for input in /sys/class/input/input*; do
+    test -f "$input/id/bustype" || continue
+    if test "$($b cat "$input/id/bustype")" = 0003; then usb_input=1; fi
+done
+test "$usb_input" = 1
+test -d /sys/class/sound
 # Exercise the real kernel firmware loader with a modular test device. The
 # guest has no /lib/firmware: a successful request proves the compiled
 # native search path finds the exact bytes under /System/Kernel/Firmware.
@@ -96,6 +119,8 @@ chmod 0755 "$root/init"
 if ! timeout 90 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 512 \
     -display none -monitor none -serial "file:$work/serial.log" -no-reboot \
     -netdev user,id=net0,restrict=on -device e1000e,netdev=net0 \
+    -device qemu-xhci,id=xhci -device usb-tablet,bus=xhci.0 \
+    -device intel-hda -device hda-duplex \
     -kernel "$kernel" -initrd "$work/initramfs.gz" \
     -append 'console=ttyS0 rdinit=/init panic=1' ||
     ! awk '{ sub(/\r$/, ""); if ($0 == "NATIVE_DRIVER_AUTOLOAD_PASS") found=1 }
