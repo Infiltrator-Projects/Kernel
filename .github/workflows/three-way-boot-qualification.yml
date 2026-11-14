@@ -39,7 +39,7 @@ jobs:
             build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
             dwarves cpio rsync kmod libkmod-dev busybox-static qemu-system-x86 qemu-utils \
             ovmf dosfstools mtools gnu-efi cmake pkg-config python3 git wget \
-            file zstd liblz4-dev e2fsprogs gdisk debhelper libdw-dev iproute2 curl
+            file zstd liblz4-dev e2fsprogs gdisk debhelper libdw-dev iproute2 curl udev
           df -h .
           command -v qemu-system-x86_64
           test -s /usr/share/OVMF/OVMF_CODE_4M.fd
@@ -148,10 +148,13 @@ jobs:
         run: |
           set -euo pipefail
           source="$RUNNER_TEMP/load-native-driver.c"
+          rule="$RUNNER_TEMP/81-infiltratoros-drivers.rules"
           curl -fsSL --retry 3 -o "$source" https://raw.githubusercontent.com/Infiltrator-Projects/InfiltratorOS/7922e3c647b0cb353bd6b1844475cf8f425088e7/packaging/load-native-driver.c
+          curl -fsSL --retry 3 -o "$rule" https://raw.githubusercontent.com/Infiltrator-Projects/InfiltratorOS/7922e3c647b0cb353bd6b1844475cf8f425088e7/packaging/81-infiltratoros-drivers.rules
           printf '%s  %s\n' a534d879ffa35ee6e6b07052fa382d1bac2f0104b9bdb4d612f2ad8dee9a906a "$source" | sha256sum -c -
+          printf '%s  %s\n' e1fbcd3a50b4ef20fc1a60515650b0af2bc19dfdea026d26f1ec1366acb5a70f "$rule" | sha256sum -c -
           bash tests/native-driver-qemu.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
-            "$NATIVE_STAGE" "$RUNNER_TEMP/InfiltratorOS/Tests" "$source"
+            "$NATIVE_STAGE" "$RUNNER_TEMP/InfiltratorOS/Tests" "$source" "$rule"
 
       # This independently tests the V2 firmware bridge using the same real
       # InfiltratorOS kernel compiled above. The older persistence test below

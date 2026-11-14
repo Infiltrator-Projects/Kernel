@@ -7,6 +7,7 @@ kernel=$(realpath "${1:?compiled kernel image required}")
 stage=$(realpath "${2:?staged native kernel required}")
 workspace=$(realpath -m "${3:?temporary workspace required}")
 os_loader_source=$(realpath "${4:?verified InfiltratorOS device loader source required}")
+udev_rule=$(realpath "${5:?verified InfiltratorOS device rule required}")
 version=$(<"$(dirname "$0")/../VERSION")
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 native="InfiltratorOS-$version"
@@ -19,17 +20,22 @@ modinfo -F alias "$dummy" | grep -Fxq 'rtnl-link-dummy'
 mkdir -p "$workspace"
 work=$(mktemp -d "$workspace/Kernel-Drivers.XXXXXXXX")
 root="$work/initramfs"
-mkdir -p "$root"/{bin,dev,proc,sys,System/Kernel/Modules,System/Kernel/Runtime,System/Kernel/Firmware,System/Commands/InfiltratorOS}
+mkdir -p "$root"/{bin,dev,proc,sys,run,etc/udev/rules.d,System/Kernel/Modules,System/Kernel/Runtime,System/Kernel/Firmware,System/Commands/InfiltratorOS}
 printf 'InfiltratorOS native firmware qualification\n' > "$root/System/Kernel/Firmware/native-qualification.bin"
 cp "$(command -v busybox)" "$root/bin/busybox"
 ln -s busybox "$root/bin/sh"
 cp -a "$module_root" "$root/System/Kernel/Modules/"
 cp -a "$(dirname "$helper")" "$root/System/Kernel/Runtime/"
+cp "$udev_rule" "$root/etc/udev/rules.d/81-infiltratoros-drivers.rules"
 cc -std=c11 -O2 -Wall -Wextra -Werror "$os_loader_source" \
     -o "$root/System/Commands/InfiltratorOS/load-native-driver"
 ip=$(command -v ip)
+udevadm=$(command -v udevadm)
+udevd=/usr/lib/systemd/systemd-udevd
+[[ -x $udevd && -x $udevadm ]]
 cp -L --parents "$ip" "$root"
-for executable in "$ip" "$helper" "$root/System/Commands/InfiltratorOS/load-native-driver"; do
+cp -L --parents "$udevd" "$udevadm" "$root"
+for executable in "$ip" "$udevd" "$udevadm" "$helper" "$root/System/Commands/InfiltratorOS/load-native-driver"; do
     while IFS= read -r library; do
         cp -L --parents "$library" "$root"
     done < <(ldd "$executable" | awk '$2 == "=>" && $3 ~ /^\// {print $3} $1 ~ /^\// {print $1}')
@@ -52,7 +58,7 @@ test ! -d /sys/module/dummy
 IP_COMMAND link add native0 type dummy
 test -d /sys/module/dummy
 IP_COMMAND link show native0
-# A udev modalias event enters the real conversion package's loader. The
+# A real udev event runs the exact conversion package's rule and loader. The
 # virtual PCI adapter exercises the same alias discovery as hardware hotplug.
 test ! -d /sys/module/e1000e
 device=
@@ -63,7 +69,10 @@ for alias_file in /sys/bus/pci/devices/*/modalias; do
     esac
 done
 test -n "$device"
-/System/Commands/InfiltratorOS/load-native-driver "$alias"
+UDEVD_COMMAND --daemon
+UDEVADM_COMMAND control --ping
+UDEVADM_COMMAND trigger --action=add "$device"
+UDEVADM_COMMAND settle --timeout=30
 test -d /sys/module/e1000e
 test -L "$device/driver"
 # Exercise the real kernel firmware loader with a modular test device. The
@@ -81,6 +90,7 @@ echo NATIVE_DRIVER_AUTOLOAD_PASS
 GUEST
 # ip may reside under /sbin or /usr/sbin on the build host.
 sed -i "s|IP_COMMAND|$ip|g" "$root/init"
+sed -i "s|UDEVD_COMMAND|$udevd|g; s|UDEVADM_COMMAND|$udevadm|g" "$root/init"
 chmod 0755 "$root/init"
 (cd "$root" && find . -print0 | cpio --null -o -H newc --quiet --owner=0:0 | gzip -1) > "$work/initramfs.gz"
 if ! timeout 90 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 512 \
