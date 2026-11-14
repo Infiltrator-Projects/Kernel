@@ -25,6 +25,11 @@ for driver in snd_hda_intel intel_lpss_pci e1000e; do
 done
 printf '%s\n' 'kernel/drivers/hid/i2c-hid-acpi.ko' > "$modules/modules.builtin"
 bash "$root/scripts/infiltrator/verify-host-drivers.sh" "$modules" "$sys"
+mkdir -p "$work/empty-sys/bus"
+if bash "$root/scripts/infiltrator/verify-host-drivers.sh" "$modules" "$work/empty-sys" > "$work/empty.log" 2>&1; then
+    echo 'Empty device scan was accepted' >&2; exit 1
+fi
+grep -Fq 'No active device drivers could be verified' "$work/empty.log"
 # An otherwise complete index must not hide a missing actual-device driver.
 cp "$modules/modules.dep" "$work/complete.dep"
 for driver in snd_hda_intel intel_lpss_pci e1000e; do

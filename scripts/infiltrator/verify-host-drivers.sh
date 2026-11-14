@@ -10,6 +10,7 @@ sysroot=${2:-/sys}
 fail() { printf 'Kernel hardware check: ERROR: %s\n' "$*" >&2; exit 1; }
 [[ $modules == /* && -d $modules && ! -L $modules ]] || fail 'Invalid native module directory'
 [[ $sysroot == /* && -d $sysroot ]] || fail 'Invalid sysfs directory'
+[[ -d $sysroot/bus ]] || fail 'Device-driver information is unavailable in sysfs'
 [[ -f $modules/modules.dep && -f $modules/modules.builtin ]] ||
     fail 'Native driver indexes are incomplete'
 
@@ -48,6 +49,10 @@ for bus in pci usb i2c acpi hid serio platform spi; do
     done
 done
 
+# An empty scan does not demonstrate that any of the working system's
+# hardware is supported. This can happen when sysfs is missing or incomplete,
+# and must not be reported as a successful pre-installation check.
+(( ${#active[@]} > 0 )) || fail 'No active device drivers could be verified'
 missing=0
 for name in "${!active[@]}"; do
     if [[ -z ${provided[$name]+found} ]]; then
