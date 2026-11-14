@@ -178,6 +178,29 @@ jobs:
             "$work/package/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI" \
             "$NATIVE_OBJECTS/arch/x86/boot/bzImage" "$work/vm"
 
+      - name: Fetch the pinned EXT4 boot qualification
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Infiltrator-Projects/Filesystem-EXT4
+          ref: a42ed0d7a783804b3500320d39583aed49f460dc
+          path: ext4-filesystem-source
+
+      - name: Boot the compiled kernel through the deployed EXT4 shared object
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/InfiltratorOS/Tests/EXT4-Firmware"
+          mkdir -p "$work/package"
+          package="$work/infiltrator-filesystem-ext4.deb"
+          curl -fsSL --retry 3 -o "$package" https://github.com/Infiltrator-Projects/Filesystem-EXT4/releases/download/v1.0.11/infiltrator-filesystem-ext4_1.0.11_amd64.deb
+          printf '%s  %s\n' 322ab7363e88ac5c6a53d3f2d9778391c08a0ba69814a7aa4e157fbe7926d9f2 "$package" | sha256sum -c -
+          dpkg-deb -x "$package" "$work/package"
+          boot="$RUNNER_TEMP/InfiltratorOS/Tests/V2-Firmware/package/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI"
+          so="$work/package/System/Filesystems/EXT4.so"
+          kernel="$NATIVE_OBJECTS/arch/x86/boot/bzImage"
+          bash ext4-filesystem-source/tests/firmware-ext4.sh "$boot" "$so" "$kernel" "$work/clean"
+          bash ext4-filesystem-source/tests/firmware-ext4.sh "$boot" "$so" "$kernel" "$work/recovery" needs-recovery
+
       - name: Boot from InfiltratorFS using real Boot EFI and real Kernel
         shell: bash
         timeout-minutes: 35
@@ -216,6 +239,7 @@ jobs:
             ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-EXT4.*/serial*.log
             ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-Drivers.*/serial*.log
             ${{ runner.temp }}/InfiltratorOS/Tests/V2-Firmware/vm/serial.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/EXT4-Firmware/*/serial.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/UEFI-build.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/CMake.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/FilesystemBuild.log

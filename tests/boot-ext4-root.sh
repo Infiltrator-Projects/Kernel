@@ -38,7 +38,12 @@ chmod 0755 "$root/sbin/init"
 truncate -s 80M "$work/disk.img"
 sgdisk -n 1:2048:+8M -t 1:ef00 -n 2:18432:+64M -t 2:8300 "$work/disk.img"
 truncate -s 64M "$work/root.img"
-mkfs.ext4 -q -F -b 4096 -d "$root" "$work/root.img"
+# Match the 4 KiB EXT4 feature set reported by the target Mint system.
+# A mounted journal normally sets needs_recovery; the clean shutdown below
+# gives the second boot a consistent image without forcing that flag by hand.
+features=has_journal,ext_attr,resize_inode,dir_index,filetype,extent,64bit,flex_bg
+features+=,sparse_super,large_file,huge_file,dir_nlink,extra_isize,metadata_csum
+mkfs.ext4 -q -F -b 4096 -O "none,$features" -d "$root" "$work/root.img"
 dd if="$work/root.img" of="$work/disk.img" bs=1M seek=9 conv=notrunc status=none
 
 boot() {
