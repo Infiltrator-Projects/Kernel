@@ -249,6 +249,13 @@ $sourcename ($packageversion) $distribution; urgency=low
  -- $maintainer  $(date -R)
 EOF
 
+# The native GCC build does not require Python. Retain upstream's dependency
+# for non-native packaging, whose optional build profiles may still use it.
+python_build_dependency='python3:native, '
+if [ "$native_identity" -eq 1 ]; then
+	python_build_dependency=
+fi
+
 # Generate a control file
 cat <<EOF > debian/control
 Source: $sourcename
@@ -261,7 +268,7 @@ Build-Depends-Arch: bc, bison, flex,
  gcc-${host_gnu} <!pkg.${sourcename}.nokernelheaders>,
  kmod, libdw-dev:native, libelf-dev:native,
  libssl-dev:native, libssl-dev <!pkg.${sourcename}.nokernelheaders>,
- python3:native, rsync
+ ${python_build_dependency}rsync
 Homepage: $homepage
 
 Package: $image_package

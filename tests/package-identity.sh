@@ -22,6 +22,7 @@ printf 'CONFIG_MODULES=y\n' > "$testdir/.config"
     "$root/scripts/package/mkdebian"
 )
 control="$testdir/debian/control"
+! grep -q 'python3:native' "$control"
 changelog="$testdir/debian/changelog"
 grep -Fxq 'Source: infiltratoros-kernel' "$control"
 grep -Fxq 'Package: infiltratoros-kernel-image-0.1.1' "$control"
@@ -90,6 +91,7 @@ cp "$testdir/include/config/auto.conf" "$testdir/legacy/include/config/auto.conf
     sh "$root/scripts/package/mkdebian"
 )
 grep -Fxq 'Package: linux-image-7.0.14-infiltrator' "$testdir/legacy/debian/control"
+grep -q 'python3:native' "$testdir/legacy/debian/control"
 grep -Fxq 'Package: linux-headers-7.0.14-infiltrator' "$testdir/legacy/debian/control"
 ! grep -Fq 'Package: infiltratoros-kernel-' "$testdir/legacy/debian/control"
 echo 'PASS: native Debian image/headers/debug identity and verified dpkg-gencontrol binary ABI fields'

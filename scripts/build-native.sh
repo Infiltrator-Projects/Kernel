@@ -232,6 +232,9 @@ gcc -std=c11 -O2 -Wall -Wextra -Werror \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT
 log "Configuring host baseline with independently owned non-boot filesystems excluded"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
+if grep -Fqx 'CONFIG_LTO_CLANG=y' "$obj/.config"; then
+  fail 'Clang LTO currently requires the Python jobserver; the native no-Python build cannot use it'
+fi
 grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config" ||
   fail 'EXT4 root filesystem support must be built into the native kernel'
 grep -Fqx 'CONFIG_BLK_DEV_NVME=y' "$obj/.config" ||
