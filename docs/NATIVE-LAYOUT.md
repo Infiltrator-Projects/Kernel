@@ -272,9 +272,9 @@ verifies native packages and installs the resulting files into the host's
 **Native file installation is not boot activation.** The installer
 does not replace the host's current boot image, module path, EFI files
 or NVRAM entries, and does not claim native OS/root/module-loader
-qualification. GitHub does not compile or test the kernel as part
-of publishing the downloader. The source update must be verified by
-a real local compilation and package install.
+qualification. Publication of the downloader is gated on exact-source VM
+qualification. A real local compilation, physical boot and device operation
+remain separately unverified.
 
 ## Identity and licensing
 
@@ -288,8 +288,8 @@ global string substitution.
 
 The first Boot + Kernel + InfiltratorFS integration test is now
 `tests/infiltratorfs-native-boot.py`, orchestrated by
-`scripts/infiltrator/test-infiltratorfs-boot.sh` and exposed via the
-GitHub `.run` option `--trial-infiltratorfs`.
+`scripts/infiltrator/test-infiltratorfs-boot.sh` for development CI. It is not
+an option or separate launcher in the public kernel installer.
 An ESP containing **no kernel and no initramfs** holds only Boot and the
 InfiltratorFS-owned `drivers_x64/InfiltratorFS_x64.efi` reader.
 Both the real kernel image and initramfs live in the separate

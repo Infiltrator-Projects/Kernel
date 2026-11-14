@@ -138,64 +138,28 @@ successfully compiled `~/Kernel/dist/` artifacts untouched.
 
 [Native InfiltratorOS Kernel source and installed-file contract](docs/NATIVE-LAYOUT.md) specifies the `/System/Kernel/{Images,Modules,Filesystems,Firmware}` layout. Staging and `.run` compilation do **not** install or boot a kernel; Boot/Setup integration is still outstanding.
 
-## Native kernel module discovery (first stage)
+## Native kernel module discovery
 
-Kernel 0.1.0 now compiles `CONFIG_MODPROBE_PATH` pointing to
-`/System/Kernel/Runtime/InfiltratorOS-0.1.0/modprobe`. At runtime this helper
-builds an indexed `/run/infiltratoros-kernel` view of the compiled modules
-under `/System/Kernel/Modules/InfiltratorOS-0.1.0/`, plus only ABI-compatible
-`.ko` filesystem adapters from `/System/Kernel/Filesystems/`. The kernel's
-firmware loader searches `/System/Kernel/Firmware` before its upstream
-fallbacks. The helper refuses to load modules when a different kernel is
-running and never changes Linux Mint `/lib/modules`, `/boot`, EFI or NVRAM.
+The native kernel uses its versioned helper in
+`/System/Kernel/Runtime/InfiltratorOS-<version>/modprobe` to load ordinary
+hardware drivers from `/System/Kernel/Modules/InfiltratorOS-<version>/`.
+Device discovery uses the installed InfiltratorOS udev rule, and the kernel
+searches `/System/Kernel/Firmware` before the existing Linux firmware paths.
+The helper refuses to load native drivers into the distribution kernel.
 
-The accompanying native systemd unit is staged under `/System/Kernel/Runtime/`
-but is **not enabled on the Mint build host**. Kernel requests after the native
-root is available can invoke the compiled-in helper automatically. Early
-initramfs requirements, a verified native root, real module insertion and the
-unified `/System/Filesystems/*.so` kernel bridge remain separately unqualified.
-Ordinary Linux cannot load a userspace `.so` as a `.ko` simply by redirecting paths.
+A VM test has exercised automatic driver loading from the native hierarchy;
+physical hardware qualification is still required. Linux cannot directly load
+a userspace filesystem `.so` as a kernel module. The V2 filesystem bridge for
+Linux remains separate unfinished work.
 
 ## Three-component Boot → InfiltratorFS → Kernel qualification
 
-The GitHub kernel downloader now supports `--trial-infiltratorfs` as an
-opt-in isolated QEMU/OVMF trial after native kernel compilation. This
-test deliberately **does not place a kernel or initramfs on FAT32**. Only
-Boot's EFI executable and the independent InfiltratorFS EFI driver are
-on the disposable FAT32 bootstrap image. A separate, canonical Format
-0.19 InfiltratorFS image contains the **real InfiltratorOS kernel image**,
-the generated initramfs and a known source marker. Boot must discover
-that InfiltratorFS volume through the filesystem-owned UEFI driver,
-load the kernel and initramfs, and transfer execution. The test then
-compiles `infiltratorfs.ko` against the matching freshly built
-`0.1.0-infiltrator` kernel, bundles its declared dependencies into the
-initramfs, mounts that same InfiltratorFS image in the guest, reads the
-marker, writes and verifies a file, and cleanly unmounts it.
-
-A successful result requires all guest markers, ending in
-`INFS_BOOT_KERNEL_FILESYSTEM_PASS`. A failed UEFI driver, incompatible
-module, unsuccessful mount or bad handoff is a **failure**, not a simulated
-success. Source inputs are pinned to Boot 0.1.39 and InfiltratorFS
-commit `c8f6431f2de34806d8614a241cab8db5a0daad48`.
-Trial logs/images remain under `/Temporary/InfiltratorOS/Kernel/Tests`.
-The ordinary `.run` path still does not modify Mint boot files or
-activate the new kernel. GitHub's lightweight `.run` release job checks
-trial script syntax and packaging; it does not run the heavyweight VM.
-The [initial real VM trial](https://github.com/Infiltrator-Projects/Kernel/actions/runs/42431603931)
-and the [expanded two-boot qualification](https://github.com/Infiltrator-Projects/Kernel/actions/runs/42434204081)
-have both passed with retained guest serial logs. Physical firmware, Secure
-Boot and an installed native-root desktop remain separate qualifications.
-
-### Direct GitHub trial launcher
-
-The v0.1.0 release publishes **two small source-downloader .runs**:
-`InfiltratorOS-Kernel-0.1.0-amd64.run` remains the regular installation
-file, while `InfiltratorOS-Kernel-0.1.0-InfiltratorFS-Trial-amd64.run`
-runs this three-way VM trial directly when launched. The trial file has
-`--build-only`, `--install-deps` and `--trial-infiltratorfs` preselected:
-it compiles but **does not install or activate a host kernel**. It may
-ask for sudo solely to install QEMU, EFI and filesystem build packages.
-It never touches a physical drive or the host ESP.
+The development workflow runs isolated QEMU/OVMF tests using disposable disk
+images. One qualification boots the compiled kernel through a V2 filesystem
+provider. An older persistence qualification uses an EFI filesystem driver and
+kernel filesystem module; it does not establish a V2-only Linux storage path.
+The public installer does not create a separate BOOT configuration or provide
+a separate VM test launcher. Physical firmware and hardware remain unqualified.
 
 ## Verified two-boot native InfiltratorFS milestone — 8 November 2026
 
