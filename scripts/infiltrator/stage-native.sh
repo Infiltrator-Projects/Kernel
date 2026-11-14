@@ -165,6 +165,22 @@ log "Verified exact compiled image and module payload for ABI $release"
 mkdir -p "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version"
 rsync -a --exclude='/build' --exclude='/source' "$module_path/" \
   "$tmp/result/System/Kernel/Modules/InfiltratorOS-$component_version/"
+# Native packages include a version-bound userspace loader alongside the
+# driver indexes. Staging must preserve that exact runtime as well, otherwise
+# the staged image cannot exercise the same autoload path as installation.
+# Historical packages without a Runtime directory remain readable inputs.
+runtime_path="$native_source/Runtime/InfiltratorOS-$component_version"
+runtime_manifest=not-included
+if [[ -e "$runtime_path" || -L "$runtime_path" ]]; then
+  [[ -d "$runtime_path" && ! -L "$runtime_path" &&
+     -f "$runtime_path/modprobe" && ! -L "$runtime_path/modprobe" && -x "$runtime_path/modprobe" &&
+     -f "$runtime_path/VERSION" && ! -L "$runtime_path/VERSION" &&
+     $(<"$runtime_path/VERSION") == "$component_version" ]] ||
+    fail 'Native kernel module runtime is incomplete or has the wrong version'
+  mkdir -p "$tmp/result/System/Kernel/Runtime/InfiltratorOS-$component_version"
+  rsync -a -- "$runtime_path/" "$tmp/result/System/Kernel/Runtime/InfiltratorOS-$component_version/"
+  runtime_manifest="System/Kernel/Runtime/InfiltratorOS-$component_version/modprobe"
+fi
 # The two reserved namespaces must remain format-owner controlled.
 cat > "$tmp/result/STAGING-STATUS.txt" <<TEXT
 product=InfiltratorOS Kernel
@@ -175,7 +191,7 @@ module_abi=$release
 boot_install=not-performed
 host_install=not-performed
 secure_boot=not-qualified
-module_runtime_path=not-integrated
+module_runtime_path=$runtime_manifest
 module_namespace=System/Kernel/Modules/InfiltratorOS-$component_version
 staging_location=Temporary
 runtime_status=transitional-not-bootable

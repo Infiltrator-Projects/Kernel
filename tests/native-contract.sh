@@ -120,6 +120,7 @@ grep -Fq 'Compiled boot image not found' "$sandbox/wrong-abi.log"
 mkdir -p "$sandbox/native2pkg/DEBIAN" \
   "$sandbox/native2pkg/System/Kernel/Images" \
   "$sandbox/native2pkg/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers" \
+  "$sandbox/native2pkg/System/Kernel/Runtime/InfiltratorOS-$version" \
   "$sandbox/native2packages"
 cat > "$sandbox/native2pkg/DEBIAN/control" <<EOF_NATIVE2
 Package: infiltratoros-kernel-image-$version
@@ -133,12 +134,28 @@ EOF_NATIVE2
 printf 'correct native image\n' > "$sandbox/native2pkg/System/Kernel/Images/InfiltratorOS-$version.img"
 printf 'correct native config\n' > "$sandbox/native2pkg/System/Kernel/Images/InfiltratorOS-$version.config"
 printf 'correct native .ko\n' > "$sandbox/native2pkg/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/native2.ko"
+printf '#!/bin/sh\nexit 0\n' > "$sandbox/native2pkg/System/Kernel/Runtime/InfiltratorOS-$version/modprobe"
+chmod 0755 "$sandbox/native2pkg/System/Kernel/Runtime/InfiltratorOS-$version/modprobe"
+printf '%s\n' "$version" > "$sandbox/native2pkg/System/Kernel/Runtime/InfiltratorOS-$version/VERSION"
 dpkg-deb --build "$sandbox/native2pkg" "$sandbox/native2packages/real-native-path.deb" >/dev/null
 bash scripts/infiltrator/stage-native.sh --packages "$sandbox/native2packages" \
   --objects "$sandbox/obj" --output "$sandbox/re-staged-native2"
 grep -Fxq 'correct native image' "$sandbox/re-staged-native2/System/Kernel/Images/InfiltratorOS-$version.img"
 grep -Fxq 'correct native config' "$sandbox/re-staged-native2/System/Kernel/Images/InfiltratorOS-$version.config"
 grep -Fxq 'correct native .ko' "$sandbox/re-staged-native2/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/native2.ko"
+[[ -x "$sandbox/re-staged-native2/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" ]]
+grep -Fxq "$version" "$sandbox/re-staged-native2/System/Kernel/Runtime/InfiltratorOS-$version/VERSION"
+grep -Fxq "module_runtime_path=System/Kernel/Runtime/InfiltratorOS-$version/modprobe" "$sandbox/re-staged-native2/STAGING-STATUS.txt"
 [[ ! -e "$sandbox/re-staged-native2/boot" && ! -e "$sandbox/re-staged-native2/lib" ]]
 (cd "$sandbox/re-staged-native2" && sha256sum --quiet -c SHA256SUMS.txt)
+# Never publish a partially staged runtime when its version is inconsistent.
+printf '0.0.0\n' > "$sandbox/native2pkg/System/Kernel/Runtime/InfiltratorOS-$version/VERSION"
+dpkg-deb --build "$sandbox/native2pkg" "$sandbox/native2packages/real-native-path.deb" >/dev/null
+if bash scripts/infiltrator/stage-native.sh --packages "$sandbox/native2packages" \
+  --objects "$sandbox/obj" --output "$sandbox/bad-runtime" >"$sandbox/bad-runtime.log" 2>&1; then
+  echo 'FAIL: mismatched native driver runtime was staged' >&2
+  exit 1
+fi
+[[ ! -e "$sandbox/bad-runtime" ]]
+grep -Fq 'module runtime is incomplete or has the wrong version' "$sandbox/bad-runtime.log"
 echo 'PASS: native Temporary staging, old Linux-path and new native-path package inputs, ABI validation and preservation'

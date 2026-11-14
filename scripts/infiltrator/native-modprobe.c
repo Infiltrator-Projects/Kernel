@@ -56,7 +56,9 @@ int main(int argc, char **argv)
 		return 1;
 	result = kmod_module_new_from_lookup(context, argv[position], &modules);
 	if (result >= 0) {
-		if (!modules && !quiet)
+		/* Quiet suppresses diagnostics, not failure: request_module() must
+		 * not be told a nonexistent driver was loaded successfully. */
+		if (!modules)
 			result = -ENOENT;
 		kmod_list_foreach(item, modules) {
 			struct kmod_module *module = kmod_module_get_module(item);

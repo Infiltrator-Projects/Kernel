@@ -39,7 +39,7 @@ jobs:
             build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
             dwarves cpio rsync kmod libkmod-dev busybox-static qemu-system-x86 qemu-utils \
             ovmf dosfstools mtools gnu-efi cmake pkg-config python3 git wget \
-            file zstd liblz4-dev e2fsprogs gdisk debhelper libdw-dev
+            file zstd liblz4-dev e2fsprogs gdisk debhelper libdw-dev iproute2 curl
           df -h .
           command -v qemu-system-x86_64
           test -s /usr/share/OVMF/OVMF_CODE_4M.fd
@@ -47,6 +47,8 @@ jobs:
           python3 -m py_compile tests/infiltratorfs-native-boot.py tests/infiltratoros-native-payload.py
           python3 tests/test-integration-preflight.py
           bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
+          bash -n tests/native-driver-qemu.sh
+          bash tests/native-contract.sh
 
       - name: Configure native kernel ABI and minimum QEMU boot hardware
         shell: bash
@@ -63,7 +65,8 @@ jobs:
           scripts/config --file "$obj/.config" \
             -e EFI -e EFI_STUB -e PCI -e PCI_MSI -e VMD -e VIRTIO \
             -e VIRTIO_PCI -e VIRTIO_BLK \
-            -e MODULES -m DUMMY -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
+            -e MODULES -e NETDEVICES -e ETHERNET -e NET_VENDOR_INTEL -m DUMMY -m E1000E \
+            -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
             -e RD_GZIP -e BLK_DEV -e BLK_DEV_NVME -e EXT4_FS \
             -e DAMON -e DAMON_VADDR -e DAMON_PADDR -e DAMON_SYSFS -e DAMON_RECLAIM -e DAMON_LRU_SORT \
@@ -87,6 +90,7 @@ jobs:
           grep -Fqx 'CONFIG_EXT4_FS=y' "$obj/.config"
           grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
           grep -Fqx 'CONFIG_DUMMY=m' "$obj/.config"
+          grep -Fqx 'CONFIG_E1000E=m' "$obj/.config"
           grep -Fqx 'CONFIG_DEBUG_INFO=y' "$obj/.config"
           grep -Fqx 'CONFIG_DAMON=y' "$obj/.config"
           grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"
@@ -136,6 +140,16 @@ jobs:
           bash tests/boot-ext4-root.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
             "$RUNNER_TEMP/InfiltratorOS/Tests"
 
+      - name: Automatically load a native hardware driver without lib modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/load-native-driver.c"
+          curl -fsSL --retry 3 -o "$source" https://raw.githubusercontent.com/Infiltrator-Projects/InfiltratorOS/7922e3c647b0cb353bd6b1844475cf8f425088e7/packaging/load-native-driver.c
+          printf '%s  %s\n' a534d879ffa35ee6e6b07052fa382d1bac2f0104b9bdb4d612f2ad8dee9a906a "$source" | sha256sum -c -
+          bash tests/native-driver-qemu.sh "$NATIVE_OBJECTS/arch/x86/boot/bzImage" \
+            "$NATIVE_STAGE" "$RUNNER_TEMP/InfiltratorOS/Tests" "$source"
+
       - name: Boot from InfiltratorFS using real Boot EFI and real Kernel
         shell: bash
         timeout-minutes: 35
@@ -172,6 +186,7 @@ jobs:
           path: |
             ${{ runner.temp }}/Kernel-build.log
             ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-EXT4.*/serial*.log
+            ${{ runner.temp }}/InfiltratorOS/Tests/Kernel-Drivers.*/serial*.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/UEFI-build.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/CMake.log
             ${{ runner.temp }}/InfiltratorOS/Tests/**/FilesystemBuild.log

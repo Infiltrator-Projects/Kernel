@@ -8,6 +8,14 @@ routes udev coldplug and hotplug requests to this executable for the running
 native ABI. The installer makes the managed native directories and installed
 payload root-owned before use.
 
+`tests/native-driver-qemu.sh` is part of the Kernel integration workflow. It
+boots the compiled native kernel with its staged driver index, verifies a
+kernel-triggered driver load and runs the pinned InfiltratorOS device loader
+against a virtual PCI network adapter without a `/lib/modules` tree. The test
+also requires a quiet missing-driver request to fail. This VM evidence does
+not qualify a particular physical computer, wireless adapter, sound device
+or pointing device.
+
 
 ## Source of truth
 
