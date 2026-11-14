@@ -139,13 +139,16 @@ target="$install_root/System/Kernel"
   fail 'Refusing to install through a symlinked System or Kernel directory'
 if [[ "$install_root" == / ]]; then
   log 'Installing exclusively below /System/Kernel (sudo required); no bootloader or kernel activation'
-  writer=(sudo)
+  writer=()
+  if (( EUID != 0 )); then writer=(sudo); fi
+  rsync_owner=(--chown=root:root --chmod=go-w)
 else
   log "Installing to isolated test root $install_root (no sudo)"
   writer=()
+  rsync_owner=()
 fi
 # Native kernel repair is deliberately opt-in. No unrelated filesystem
-# providers, firmware, or directories outside these six versioned paths move.
+# providers, firmware, or directories outside these versioned paths move.
 managed_paths=(
   "Images/InfiltratorOS-$version.img"
   "Images/InfiltratorOS-$version.config"
@@ -159,6 +162,15 @@ for parent in Images Modules Headers Debug Runtime; do
   [[ ! -L "$target/$parent" ]] ||
     fail "Refusing symlinked native installation parent: $target/$parent"
 done
+if [[ $install_root == / ]]; then
+  # The running kernel can invoke its native helper as root. Seal each
+  # parent top-down before inspecting or copying executable payloads.
+  for parent in "$install_root/System" "$target" "$target"/{Images,Modules,Headers,Debug,Runtime}; do
+    [[ ! -L $parent ]] || fail "Refusing symlinked system path: $parent"
+    "${writer[@]}" install -d -m 0755 -o root -g root -- "$parent" ||
+      fail "Cannot secure native kernel directory: $parent"
+  done
+fi
 collision=0
 for rel in "${managed_paths[@]}"; do
   [[ ! -L "$target/$rel" ]] || fail "Refusing symlinked kernel path $target/$rel"
@@ -190,7 +202,7 @@ installation_started=1
 
 # The checked file set is new and versioned. --ignore-existing also defends
 # against unexpected preexisting files appearing between checking and copy.
-"${writer[@]}" rsync -a --ignore-existing -- "$native/" "$target/" ||
+"${writer[@]}" rsync -a "${rsync_owner[@]}" --ignore-existing -- "$native/" "$target/" ||
   fail 'Native kernel installation copy failed'
 # Verify each installed regular file, without ever removing unrelated files.
 while IFS= read -r -d '' file; do
@@ -205,4 +217,4 @@ rollback_needed=0
 log "PASS: freshly compiled native Kernel $version packages installed at $target"
 if [[ -n "$backup_dir" ]]; then log "Previous native files preserved at $backup_dir"; fi
 log 'No changes to Mint /boot, /lib/modules, /usr/src, EFI, NVRAM, or running kernel.'
-log 'Boot activation, module-loader runtime and full OS boot remain separate development qualifications.'
+log 'BOOT discovery and host hardware verification occur at the next boot.'

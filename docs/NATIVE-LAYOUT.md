@@ -1,5 +1,14 @@
 # InfiltratorOS Kernel: native source and installed layout
 
+New native installations use the versioned executable at
+`/System/Kernel/Runtime/InfiltratorOS-<version>/modprobe`. It reads the
+matching binary dependency and alias indexes directly under
+`/System/Kernel/Modules/InfiltratorOS-<version>`. The conversion package
+routes udev coldplug and hotplug requests to this executable for the running
+native ABI. The installer makes the managed native directories and installed
+payload root-owned before use.
+
+
 ## Source of truth
 
 The **Kernel** Git repository holds the complete source tree at its root.

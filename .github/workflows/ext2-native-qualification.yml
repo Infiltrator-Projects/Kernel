@@ -32,7 +32,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libelf-dev libssl-dev dwarves \
-            kmod busybox-static qemu-system-x86 qemu-utils \
+            kmod libkmod-dev busybox-static qemu-system-x86 qemu-utils \
             e2fsprogs cpio gzip file python3 git
           bash -n tests/test-ext2-module-qemu.sh
           release=$(<VERSION)

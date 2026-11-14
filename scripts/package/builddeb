@@ -86,11 +86,13 @@ install_linux_image () {
 		# Packaged only inside native /System/Kernel, not Mint /etc or /boot.
 		runtime_dir="${native_root}/Runtime/InfiltratorOS-${native_version}"
 		mkdir -p "$runtime_dir"
-		install -m 0755 "${srctree}/scripts/infiltrator/module-runtime.sh" "$runtime_dir/modprobe"
+		# The helper runs on the host and points libkmod straight at the
+		# versioned native module tree created above.
+		${HOSTCC:-cc} -std=c11 -O2 -Wall -Wextra -Werror \
+			"-DINFILTRATOROS_RELEASE=\"$native_version\"" \
+			"${srctree}/scripts/infiltrator/native-modprobe.c" -lkmod \
+			-o "$runtime_dir/modprobe"
 		printf "%s\n" "$native_version" > "$runtime_dir/VERSION"
-		sed "s/InfiltratorOS-0.1.1/InfiltratorOS-${native_version}/g" \
-			"${srctree}/scripts/infiltrator/infiltratoros-kernel-modules.service" \
-			> "$runtime_dir/infiltratoros-kernel-modules.service"
 		return
 	fi
 

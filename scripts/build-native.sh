@@ -5,7 +5,7 @@ set -euo pipefail
 fail() { echo "Kernel: ERROR: $*" >&2; exit 1; }
 log() { echo "Kernel: $*" >&2; }
 root=$(cd "$(dirname "$0")/.." && pwd -P)
-mode= source_dir= jobs= skip_deps=0 object_dir= packages_dir= fresh_objects=0
+mode= source_dir= jobs= skip_deps=0 object_dir= packages_dir= fresh_objects=0 system_package_mode=0
 while (( $# )); do
   case "$1" in
     --probe|--configure-only|--build-only) [[ -z "$mode" ]] || fail "Select one mode"; mode=$1 ;;
@@ -13,6 +13,7 @@ while (( $# )); do
       case "$opt" in --source-dir) source_dir=$1 ;; --jobs) jobs=$1 ;; --object-dir) object_dir=$1 ;; --packages-dir) packages_dir=$1 ;; esac ;;
     --fresh-objects) fresh_objects=1 ;;
     --skip-deps) skip_deps=1 ;;
+    --system-package-mode) system_package_mode=1 ;;
     --help|-h) echo "Usage: build-native.sh --probe | --configure-only | --build-only [--source-dir DIR] [--jobs N] [--skip-deps] [--object-dir ABS_DIR --packages-dir ABS_DIR --fresh-objects]"; exit 0 ;;
     *) fail "Unknown option: $1" ;;
   esac
@@ -24,15 +25,30 @@ done
 case " $ID ${ID_LIKE:-} " in *debian*|*ubuntu*|*linuxmint*) ;; *) fail "Only Debian/Mint/Ubuntu hosts supported initially" ;; esac
 running=$(uname -r)
 config="/boot/config-$running"
+if (( system_package_mode )) && [[ $running =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  # After booting the native kernel, retain the stock kernel's hardware
+  # configuration as the baseline for upgrades.
+  shopt -s nullglob
+  stock_configs=()
+  for candidate in /boot/config-*; do
+    if [[ ${candidate##*/config-} == *-* ]]; then stock_configs+=("$candidate"); fi
+  done
+  (( ${#stock_configs[@]} )) || fail 'No installed distribution kernel configuration'
+  config=$(printf '%s\n' "${stock_configs[@]}" | sort -V | tail -n1)
+  shopt -u nullglob
+fi
 [[ -r "$config" ]] || fail "Running kernel configuration not found: $config"
 # Never use the linux-signed-* source package from the signed image.
 # The exact installed headers identify the real kernel source.
-rec=$(dpkg-query -W -f='${source:Package}|${source:Version}' "linux-headers-$running" 2>/dev/null) || fail "Matching kernel headers are not installed"
-IFS='|' read -r pkg ver <<< "$rec"
-[[ -n "$pkg" && -n "$ver" ]] || fail "Could not resolve the installed kernel source version"
-log "Host: ${PRETTY_NAME:-$ID}"
-log "Kernel: $running; source: $pkg=$ver"
-log "Configuration: $config; target: native x86_64; original compiler flags"
+if (( system_package_mode )); then
+  [[ "$mode" == --build-only && -n $source_dir && $skip_deps == 1 ]] ||
+    fail 'System-package mode needs the pinned source and preinstalled build dependencies'
+else
+  rec=$(dpkg-query -W -f='${source:Package}|${source:Version}' "linux-headers-$running" 2>/dev/null) || fail "Matching kernel headers are not installed"
+  IFS='|' read -r pkg ver <<< "$rec"
+  [[ -n "$pkg" && -n "$ver" ]] || fail "Could not resolve the installed kernel source version"
+fi
+log "Host: ${PRETTY_NAME:-$ID}; using $config for native x86_64"
 if [[ "$mode" == --probe ]]; then
   if command -v apt-cache >/dev/null && apt-cache showsrc "$pkg" >/dev/null 2>&1; then
     log "APT source repositories: available"
@@ -45,7 +61,7 @@ if (( ! skip_deps )); then
   command -v apt-cache >/dev/null || fail "APT is missing"
   apt-cache showsrc "$pkg" >/dev/null 2>&1 || fail "Enable deb-src repositories and run sudo apt update"
   log "Checking/installing build dependencies; sudo may request approval"
-  sudo apt-get install -y --no-install-recommends build-essential bc bison flex fakeroot dwarves libdw-dev libelf-dev libssl-dev rsync dpkg-dev debhelper kmod
+  sudo apt-get install -y --no-install-recommends build-essential bc bison flex fakeroot dwarves libdw-dev libelf-dev libssl-dev rsync dpkg-dev debhelper kmod libkmod-dev
   sudo apt-get build-dep -y "$pkg"
 fi
 for tool in make gcc dpkg-deb sha256sum python3; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
@@ -139,7 +155,9 @@ v=$(awk '$1=="VERSION" {print $3;exit}' "$source_dir/Makefile")
 p=$(awk '$1=="PATCHLEVEL" {print $3;exit}' "$source_dir/Makefile")
 s=$(awk '$1=="SUBLEVEL" {print $3;exit}' "$source_dir/Makefile")
 base="$v.$p.$s"
-matches_running "$source_dir" || fail "Source tree does not match installed source package $pkg=$ver"
+if (( ! system_package_mode )); then
+  matches_running "$source_dir" || fail "Source tree does not match installed source package $pkg=$ver"
+fi
 log "Upstream kernel code: $base (distribution ABI: $running)"
 # Earlier releases were called as a Kbuild recipe and inherited
 # sub_make_done=1. Kbuild consequently ignored O= and compiled in the source
@@ -205,6 +223,8 @@ python3 "$root/scripts/infiltrator/prune-external-filesystems.py" apply "$obj/.c
 # devtmpfs must also be mounted for userspace on the direct boot path.
 "$source_dir/scripts/config" --file "$obj/.config" \
   --enable EXT4_FS --enable BLK_DEV_NVME --enable PCI_MSI --enable VMD \
+  --enable SCSI --enable BLK_DEV_SD --enable ATA --enable SATA_AHCI \
+  --enable VIRTIO --enable VIRTIO_PCI --enable VIRTIO_BLK \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT
 log "Configuring host baseline with independently owned non-boot filesystems excluded"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig

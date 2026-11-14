@@ -34,7 +34,7 @@ fail() { printf 'InfiltratorOS Kernel .run: ERROR: %s\n' "$*" >&2; exit 1; }
 repo='https://github.com/Infiltrator-Projects/Kernel.git'
 expected_commit=__PINNED_COMMIT__
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
-  printf 'Usage: %s [--build-only] [--jobs N] [--install-deps] [--replace-existing] [--trial-infiltratorfs]\n' "$0"
+  printf 'Usage: %s [--build-only] [--jobs N] [--install-deps] [--replace-existing] [--system-package-mode] [--trial-infiltratorfs]\n' "$0"
   echo 'Downloads the exact release source from GitHub into /Temporary/InfiltratorOS/Kernel.'
   echo 'Freshly compiles on THIS machine, verifies actual native Debian package paths,'
   echo 'and installs files under /System/Kernel (not under Mint /boot).'
@@ -50,12 +50,14 @@ build_only=0
 install_deps=0
 replace_existing=0
 trial_infiltratorfs=0
+system_package_mode=0
 jobs=
 while (( $# )); do
   case "$1" in
     --build-only) build_only=1 ;;
     --install-deps) install_deps=1 ;;
     --replace-existing) replace_existing=1 ;;
+    --system-package-mode) system_package_mode=1 ;;
     --trial-infiltratorfs) trial_infiltratorfs=1 ;;
     --jobs)
       shift; (( $# )) || fail '--jobs requires a number'
@@ -154,6 +156,7 @@ printf 'Source: %s\nObjects: %s\nPackages: %s\nLog: %s\n' \
 args=(--build-only --fresh-objects --source-dir "$source_dir"
       --object-dir "$obj" --packages-dir "$packages")
 if (( ! install_deps )); then args+=(--skip-deps); fi
+if (( system_package_mode )); then args+=(--system-package-mode); fi
 if [[ -n "$jobs" ]]; then args+=(--jobs "$jobs"); fi
 ( cd "$source_dir" && bash scripts/build-native.sh "${args[@]}" ) 2>&1 | tee "$logfile" ||
   fail "Fresh source compiler or package generation failed; see $logfile"

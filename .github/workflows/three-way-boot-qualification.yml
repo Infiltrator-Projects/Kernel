@@ -37,7 +37,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libelf-dev libssl-dev libncurses-dev \
-            dwarves cpio rsync kmod busybox-static qemu-system-x86 qemu-utils \
+            dwarves cpio rsync kmod libkmod-dev busybox-static qemu-system-x86 qemu-utils \
             ovmf dosfstools mtools gnu-efi cmake pkg-config python3 git wget \
             file zstd liblz4-dev e2fsprogs gdisk debhelper libdw-dev
           df -h .

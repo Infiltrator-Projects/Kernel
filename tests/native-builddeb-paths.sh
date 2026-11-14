@@ -18,8 +18,7 @@ mkdir -p "$1/include"
 printf 'compiled header sample\n' > "$1/include/verified.h"
 STUB
 chmod +x "$sandbox/source/scripts/package/install-extmod-build"
-cp "$root/scripts/infiltrator/module-runtime.sh" "$sandbox/source/scripts/infiltrator/module-runtime.sh"
-cp "$root/scripts/infiltrator/infiltratoros-kernel-modules.service" "$sandbox/source/scripts/infiltrator/infiltratoros-kernel-modules.service"
+cp "$root/scripts/infiltrator/native-modprobe.c" "$sandbox/source/scripts/infiltrator/"
 printf 'fake source makefile\n' > "$sandbox/source/Makefile"
 cat > "$sandbox/fake-make" <<'MAKE'
 #!/bin/sh
@@ -65,7 +64,9 @@ runtime="$sandbox/native/debian/infiltratoros-kernel-image-$version"
 [[ -d "$runtime/System/Kernel/Filesystems" && -d "$runtime/System/Kernel/Firmware" ]]
 [[ -x "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" ]]
 [[ $(cat "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/VERSION") == $version ]]
-[[ -s "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/infiltratoros-kernel-modules.service" ]]
+if "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" -q -- native_test; then
+  echo 'Native helper accepted the build host kernel' >&2; exit 1
+fi
 [[ ! -e "$runtime/lib" && ! -e "$runtime/usr" && ! -e "$runtime/boot" ]]
 [[ ! -e "$runtime/DEBIAN/postinst" && ! -e "$runtime/DEBIAN/preinst" ]]
 run_package native infiltratoros-kernel-headers-$version 1

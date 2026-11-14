@@ -319,6 +319,7 @@ fi
 if [ "$native_identity" -eq 1 ]; then
   # Add metadata to each generated paragraph after all packages are defined.
   awk -v version="$product_version" -v abi="$KERNELRELEASE" '
+    /^Build-Depends-Arch:/ { sub(/$/, " libkmod-dev:native,") }
     /^Package: (infiltratoros-kernel-image-|infiltratoros-kernel-headers-)/ {
       native=1
     }
