@@ -48,6 +48,7 @@ jobs:
           python3 tests/test-integration-preflight.py
           bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
           bash -n tests/native-driver-qemu.sh
+          bash tests/host-driver-check.sh
           bash tests/native-contract.sh
 
       - name: Configure native kernel ABI and minimum QEMU boot hardware

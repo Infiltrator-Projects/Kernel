@@ -78,6 +78,7 @@ jobs:
           bash tests/package-identity.sh
           bash tests/native-builddeb-paths.sh
           bash tests/install-native.sh
+          bash tests/host-driver-check.sh
           bash tests/module-runtime.sh
           bash -n scripts/infiltrator/test-infiltratorfs-boot.sh
           python3 -m py_compile tests/infiltratorfs-native-boot.py tests/infiltratoros-native-payload.py

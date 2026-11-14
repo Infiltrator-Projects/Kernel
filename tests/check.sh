@@ -23,6 +23,7 @@ bash tests/native-builddeb-paths.sh
 # Proves the fresh-build installer never needs /boot or /lib/modules.
 bash tests/install-native.sh
 bash -n scripts/infiltrator/package-run.sh
+bash tests/host-driver-check.sh
 bash -n scripts/infiltrator/install-native.sh
 bash tests/home-artifacts.sh
 grep -Fq 'boot_version=0.1.39' scripts/infiltrator/test-ovmf-handoff.sh

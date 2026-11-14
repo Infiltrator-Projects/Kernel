@@ -177,6 +177,11 @@ if (( trial_infiltratorfs )); then
     fail "Three-project QEMU trial failed; see logs under $workspace/Tests"
 fi
 if (( ! build_only )); then
+  # Catch an omitted currently bound driver before installing a kernel that
+  # BOOT could discover. This does not replace physical device testing.
+  ( cd "$source_dir" && bash scripts/infiltrator/verify-host-drivers.sh \
+    "$stage/System/Kernel/Modules/InfiltratorOS-$product_version" ) 2>&1 | tee -a "$logfile" ||
+    fail "Native hardware driver check failed; see $logfile"
   install_args=(--packages "$packages")
   if (( replace_existing )); then
     install_args+=(--replace-existing)
