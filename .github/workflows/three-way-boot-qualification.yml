@@ -66,6 +66,7 @@ jobs:
             -e EFI -e EFI_STUB -e PCI -e PCI_MSI -e VMD -e VIRTIO \
             -e VIRTIO_PCI -e VIRTIO_BLK \
             -e MODULES -e NETDEVICES -e ETHERNET -e NET_VENDOR_INTEL -m DUMMY -m E1000E \
+            -e FW_LOADER -m TEST_FIRMWARE \
             -e BLK_DEV_INITRD -e DEVTMPFS -e DEVTMPFS_MOUNT \
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
             -e RD_GZIP -e BLK_DEV -e BLK_DEV_NVME -e EXT4_FS \
@@ -91,6 +92,7 @@ jobs:
           grep -Fqx 'CONFIG_MODULES=y' "$obj/.config"
           grep -Fqx 'CONFIG_DUMMY=m' "$obj/.config"
           grep -Fqx 'CONFIG_E1000E=m' "$obj/.config"
+          grep -Fqx 'CONFIG_TEST_FIRMWARE=m' "$obj/.config"
           grep -Fqx 'CONFIG_DEBUG_INFO=y' "$obj/.config"
           grep -Fqx 'CONFIG_DAMON=y' "$obj/.config"
           grep -Fqx 'CONFIG_BLK_DEV_INITRD=y' "$obj/.config"

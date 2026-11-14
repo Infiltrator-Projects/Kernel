@@ -19,7 +19,8 @@ modinfo -F alias "$dummy" | grep -Fxq 'rtnl-link-dummy'
 mkdir -p "$workspace"
 work=$(mktemp -d "$workspace/Kernel-Drivers.XXXXXXXX")
 root="$work/initramfs"
-mkdir -p "$root"/{bin,dev,proc,sys,System/Kernel/Modules,System/Kernel/Runtime,System/Commands/InfiltratorOS}
+mkdir -p "$root"/{bin,dev,proc,sys,System/Kernel/Modules,System/Kernel/Runtime,System/Kernel/Firmware,System/Commands/InfiltratorOS}
+printf 'InfiltratorOS native firmware qualification\n' > "$root/System/Kernel/Firmware/native-qualification.bin"
 cp "$(command -v busybox)" "$root/bin/busybox"
 ln -s busybox "$root/bin/sh"
 cp -a "$module_root" "$root/System/Kernel/Modules/"
@@ -65,6 +66,13 @@ test -n "$device"
 /System/Commands/InfiltratorOS/load-native-driver "$alias"
 test -d /sys/module/e1000e
 test -L "$device/driver"
+# Exercise the real kernel firmware loader with a modular test device. The
+# guest has no /lib/firmware: a successful request proves the compiled
+# native search path finds the exact bytes under /System/Kernel/Firmware.
+"$helper" -- test_firmware
+test -e /dev/test_firmware
+printf '%s' native-qualification.bin > /sys/devices/virtual/misc/test_firmware/trigger_request
+$b cmp /System/Kernel/Firmware/native-qualification.bin /dev/test_firmware
 if "$helper" -q -- infiltratoros_missing_driver_000000; then
     echo NATIVE_MISSING_DRIVER_FALSE_SUCCESS
     exit 1
