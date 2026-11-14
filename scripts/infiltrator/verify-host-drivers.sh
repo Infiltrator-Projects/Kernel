@@ -3,6 +3,8 @@
 # Check the staged native package for the modules currently bound to host
 # devices. This reads sysfs and package indexes only; it never loads drivers.
 set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
 modules=${1:?native module directory required}
 sysroot=${2:-/sys}
 fail() { printf 'Kernel hardware check: ERROR: %s\n' "$*" >&2; exit 1; }

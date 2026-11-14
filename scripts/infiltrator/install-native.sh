@@ -125,6 +125,9 @@ native="$workspace/unpacked/System/Kernel"
   fail 'Freshly compiled native debug symbols are missing'
 [[ -x "$native/Runtime/InfiltratorOS-$version/modprobe" ]] ||
   fail 'Native compiled kernel module helper is missing'
+[[ -x "$native/Runtime/InfiltratorOS-$version/verify-host-drivers" &&
+   ! -L "$native/Runtime/InfiltratorOS-$version/verify-host-drivers" ]] ||
+  fail 'Native hardware driver verifier is missing'
 [[ -s "$native/Runtime/InfiltratorOS-$version/VERSION" ]] ||
   fail 'Native module helper version is missing'
 found_module=$(find "$native/Modules/InfiltratorOS-$version" -type f \

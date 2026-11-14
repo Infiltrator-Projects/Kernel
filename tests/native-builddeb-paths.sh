@@ -19,6 +19,7 @@ printf 'compiled header sample\n' > "$1/include/verified.h"
 STUB
 chmod +x "$sandbox/source/scripts/package/install-extmod-build"
 cp "$root/scripts/infiltrator/native-modprobe.c" "$sandbox/source/scripts/infiltrator/"
+cp "$root/scripts/infiltrator/verify-host-drivers.sh" "$sandbox/source/scripts/infiltrator/"
 printf 'fake source makefile\n' > "$sandbox/source/Makefile"
 cat > "$sandbox/fake-make" <<'MAKE'
 #!/bin/sh
@@ -63,6 +64,7 @@ runtime="$sandbox/native/debian/infiltratoros-kernel-image-$version"
 [[ -s "$runtime/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/test.ko" ]]
 [[ -d "$runtime/System/Kernel/Filesystems" && -d "$runtime/System/Kernel/Firmware" ]]
 [[ -x "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" ]]
+[[ -x "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/verify-host-drivers" ]]
 [[ $(cat "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/VERSION") == $version ]]
 if "$runtime/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" -q -- native_test; then
   echo 'Native helper accepted the build host kernel' >&2; exit 1

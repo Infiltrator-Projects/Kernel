@@ -92,6 +92,8 @@ install_linux_image () {
 			"-DINFILTRATOROS_RELEASE=\"$native_version\"" \
 			"${srctree}/scripts/infiltrator/native-modprobe.c" -lkmod \
 			-o "$runtime_dir/modprobe"
+		install -m 0755 "${srctree}/scripts/infiltrator/verify-host-drivers.sh" \
+			"$runtime_dir/verify-host-drivers"
 		printf "%s\n" "$native_version" > "$runtime_dir/VERSION"
 		return
 	fi

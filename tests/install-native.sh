@@ -38,6 +38,8 @@ EOF
       mkdir -p "$p/System/Kernel/Runtime/InfiltratorOS-$version"
       cp "$root/scripts/infiltrator/module-runtime.sh" "$p/System/Kernel/Runtime/InfiltratorOS-$version/modprobe"
       chmod 0755 "$p/System/Kernel/Runtime/InfiltratorOS-$version/modprobe"
+      install -m 0755 "$root/scripts/infiltrator/verify-host-drivers.sh" \
+        "$p/System/Kernel/Runtime/InfiltratorOS-$version/verify-host-drivers"
       printf "%s\n" "$version" > "$p/System/Kernel/Runtime/InfiltratorOS-$version/VERSION" ;;
     "infiltratoros-kernel-headers-$version")
       mkdir -p "$p/System/Kernel/Headers/InfiltratorOS-$version/include"
@@ -58,6 +60,7 @@ INFILTRATOROS_TEMP_ROOT="$temp_root" \
 [[ -s "$install_root/System/Kernel/Headers/InfiltratorOS-$version/include/test.h" ]]
 [[ -s "$install_root/System/Kernel/Debug/InfiltratorOS-$version/lib/modules/$abi/vmlinux" ]]
 [[ -x "$install_root/System/Kernel/Runtime/InfiltratorOS-$version/modprobe" ]]
+[[ -x "$install_root/System/Kernel/Runtime/InfiltratorOS-$version/verify-host-drivers" ]]
 [[ ! -e "$install_root/boot" && ! -e "$install_root/lib" && ! -e "$install_root/usr" ]]
 [[ $(sha256sum "$install_root/System/Kernel/Filesystems/FAT16.ko" | cut -d' ' -f1) == "$before" ]]
 if INFILTRATOROS_TEMP_ROOT="$temp_root" \
