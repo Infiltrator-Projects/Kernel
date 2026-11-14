@@ -133,6 +133,13 @@ jobs:
           bash scripts/infiltrator/stage-native.sh --objects "$obj" --packages "$packages" --output "$stage"
           bash scripts/infiltrator/install-native.sh --packages "$packages" --install-root "$install_root"
           cmp "$obj/arch/x86/boot/bzImage" "$install_root/System/Kernel/Images/InfiltratorOS-$NATIVE_RELEASE.img"
+          # Check the complete real package index and a synthetic bound NIC
+          # using the same pre-install guard as the end-user downloader.
+          scan="$INFILTRATOROS_TEMP_ROOT/Tests/HostDriverScan"
+          mkdir -p "$scan/sys/bus/pci/devices/nic/driver" "$scan/sys/module/e1000e"
+          ln -s "$scan/sys/module/e1000e" "$scan/sys/bus/pci/devices/nic/driver/module"
+          bash scripts/infiltrator/verify-host-drivers.sh \
+            "$stage/System/Kernel/Modules/InfiltratorOS-$NATIVE_RELEASE" "$scan/sys"
           echo "NATIVE_STAGE=$stage" >> "$GITHUB_ENV"
           echo "NATIVE_OBJECTS=$obj" >> "$GITHUB_ENV"
           echo 'NATIVE_KERNEL_STAGE_PASS'
