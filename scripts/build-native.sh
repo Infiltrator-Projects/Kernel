@@ -219,9 +219,9 @@ bash "$root/scripts/infiltrator/prepare-certificates.sh" "$source_dir" "$obj"
 # Compile the InfiltratorOS module helper path into the native kernel.
 native_modprobe="/System/Kernel/Runtime/InfiltratorOS-$product_version/modprobe"
 "$source_dir/scripts/config" --file "$obj/.config" --set-str MODPROBE_PATH "$native_modprobe"
-# Distro configs enable filesystem VFS drivers which are now independently
-# owned in Filesystem-* repositories.  Retain FAT/EXT and shared VFS, but
-# exclude the non-boot duplicates from both vmlinux and built .ko outputs.
+# Preserve the distribution's working filesystem VFS drivers until the
+# Common V2 SO kernel bridge is independently qualified for real mounts.
+# The historical compatibility checker is read-only: no formats are pruned.
 gcc -std=c11 -O2 -Wall -Wextra -Werror \
   "$root/scripts/infiltrator/prune-external-filesystems.c" -o "$obj/infiltrator-prune-filesystems"
 "$obj/infiltrator-prune-filesystems" apply "$obj/.config"
@@ -235,7 +235,7 @@ gcc -std=c11 -O2 -Wall -Wextra -Werror \
   --disable FUSE_FS --disable CUSE --disable VIRTIO_FS --disable FUSE_DAX \
   --disable FUSE_PASSTHROUGH --disable FUSE_IO_URING \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT
-log "Configuring host baseline with independently owned non-boot filesystems excluded"
+log "Configuring host baseline with native filesystem mount drivers preserved"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
 if grep -Fqx 'CONFIG_LTO_CLANG=y' "$obj/.config"; then
   fail 'Clang LTO currently requires the Python jobserver; the native no-Python build cannot use it'
@@ -251,8 +251,7 @@ grep -Fqx 'CONFIG_DEVTMPFS_MOUNT=y' "$obj/.config" ||
 if grep -Eq '^CONFIG_(FUSE_FS|CUSE|VIRTIO_FS|FUSE_DAX|FUSE_PASSTHROUGH|FUSE_IO_URING)=[ym]$' "$obj/.config"; then
   fail 'Filesystem FUSE is prohibited in the native kernel configuration'
 fi
-# Kconfig can re-enable an option through selects/defaults.  Fail closed if
-# any retired driver survives effective olddefconfig reconciliation.
+# Validate the effective profile without removing Linux VFS mount support.
 "$obj/infiltrator-prune-filesystems" check "$obj/.config"
 # A fresh kernel make is required at every stage: the outer `make build-only`
 # exports sub_make_done=1, which suppresses Kbuild's first-pass O= parsing.
