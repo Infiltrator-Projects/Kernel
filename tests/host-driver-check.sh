@@ -25,6 +25,31 @@ for driver in snd_hda_intel intel_lpss_pci e1000e; do
 done
 printf '%s\n' 'kernel/drivers/hid/i2c-hid-acpi.ko' > "$modules/modules.builtin"
 bash "$root/scripts/infiltrator/verify-host-drivers.sh" "$modules" "$sys"
+# A built-in PCIe port driver can be linked without a modules.builtin entry.
+# Use the same versioned layout, config and map format as the native package.
+native="$work/native/System/Kernel"
+mkdir -p "$native/Modules" "$native/Images" "$sys/module/pcieportdrv" "$sys/bus/pci/devices/port/driver"
+cp -a "$modules" "$native/Modules/InfiltratorOS-0.1.9"
+ln -s "$sys/module/pcieportdrv" "$sys/bus/pci/devices/port/driver/module"
+printf '%s\n' 'CONFIG_PCIEPORTBUS=y' > "$native/Images/InfiltratorOS-0.1.9.config"
+printf '%s\n' 'ffffffff83b47780 t pcie_portdriver' \
+    'ffffffff83ff51d8 d __initcall__kmod_pcieportdrv__478_849_pcie_portdrv_init6' \
+    > "$native/Images/InfiltratorOS-0.1.9.map"
+bash "$root/scripts/infiltrator/verify-host-drivers.sh" "$native/Modules/InfiltratorOS-0.1.9" "$sys"
+for evidence in config map; do
+    mv "$native/Images/InfiltratorOS-0.1.9.$evidence" "$work/$evidence"
+    if bash "$root/scripts/infiltrator/verify-host-drivers.sh" "$native/Modules/InfiltratorOS-0.1.9" "$sys" > "$work/no-$evidence.log" 2>&1; then
+        echo "PCIe driver was accepted without $evidence" >&2; exit 1
+    fi
+    grep -Fq 'active driver missing from native build: pcieportdrv' "$work/no-$evidence.log"
+    mv "$work/$evidence" "$native/Images/InfiltratorOS-0.1.9.$evidence"
+done
+printf '%s\n' 'CONFIG_PCIEPORTBUS=n' > "$native/Images/InfiltratorOS-0.1.9.config"
+if bash "$root/scripts/infiltrator/verify-host-drivers.sh" "$native/Modules/InfiltratorOS-0.1.9" "$sys" > "$work/disabled.log" 2>&1; then
+    echo 'Disabled PCIe driver was accepted' >&2; exit 1
+fi
+grep -Fq 'active driver missing from native build: pcieportdrv' "$work/disabled.log"
+rm "$sys/bus/pci/devices/port/driver/module"
 mkdir -p "$work/empty-sys/bus"
 if bash "$root/scripts/infiltrator/verify-host-drivers.sh" "$modules" "$work/empty-sys" > "$work/empty.log" 2>&1; then
     echo 'Empty device scan was accepted' >&2; exit 1

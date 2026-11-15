@@ -14,7 +14,8 @@ fail() { printf 'Kernel hardware check: ERROR: %s\n' "$*" >&2; exit 1; }
 [[ -f $modules/modules.dep && -f $modules/modules.builtin ]] ||
     fail 'Native driver indexes are incomplete'
 
-# Kbuild's two text indexes cover loadable and built-in drivers. Normalize
+# Kbuild's text indexes cover loadable modules and built-ins that provide
+# module metadata. Some built-in drivers have no such metadata. Normalize
 # kernel module names the same way kmod treats hyphens and underscores.
 declare -A provided=() active=()
 for index in modules.dep modules.builtin; do
@@ -34,6 +35,23 @@ for index in modules.dep modules.builtin; do
         esac
     done < "$modules/$index"
 done
+
+# The PCIe port bus is built-in-only and its source has no MODULE_FILE, so
+# Kbuild does not list it in modules.builtin. Accept it only when both the
+# matching packaged kernel configuration and symbol map identify that driver.
+# A missing file, disabled config or absent symbol stays a hard failure.
+module_leaf=${modules##*/}
+if [[ $module_leaf == InfiltratorOS-* ]]; then
+    image_dir=${modules%/*/*}/Images
+    config="$image_dir/$module_leaf.config"
+    map="$image_dir/$module_leaf.map"
+    if [[ -f $config && ! -L $config && -f $map && ! -L $map ]] &&
+       grep -Fxq 'CONFIG_PCIEPORTBUS=y' "$config" &&
+       grep -Eq '^[[:xdigit:]]+[[:space:]]+[[:alpha:]][[:space:]]+pcie_portdriver$' "$map" &&
+       grep -Eq '^[[:xdigit:]]+[[:space:]]+[[:alpha:]][[:space:]]+__initcall__kmod_pcieportdrv__.*_pcie_portdrv_init[[:digit:]]+$' "$map"; then
+        provided[pcieportdrv]=1
+    fi
+fi
 
 # A module symlink is present only for devices bound to a modular or
 # registered built-in driver. Other buses and userspace-only devices are not
@@ -61,5 +79,5 @@ for name in "${!active[@]}"; do
     fi
 done
 (( missing == 0 )) || fail 'Native kernel not installed; existing boot and kernel were preserved'
-printf 'Kernel hardware check: %s active device-driver module(s) present in native indexes.\n' "${#active[@]}"
+printf 'Kernel hardware check: %s active device-driver module(s) verified in the native build.\n' "${#active[@]}"
 printf '%s\n' 'Kernel hardware check: this does not verify firmware, device operation, or physical boot.'
