@@ -70,7 +70,7 @@ class NonbootFilesystemBuildProfile(unittest.TestCase):
         builder = (ROOT / "scripts/build-native.sh").read_text(encoding="utf-8")
         for symbol in sorted(PRUNE.DISABLED):
             self.assertIsNone(
-                re.search(r"--(?:enable|module)\\s+" + re.escape(symbol) + r"\\b", builder),
+                re.search(r"--(?:enable|module)\s+" + re.escape(symbol) + r"\b", builder),
                 f"Native builder must not re-enable duplicate filesystem: {symbol}")
         self.assertIn('"$obj/infiltrator-prune-filesystems" apply', builder)
         self.assertIn('"$obj/infiltrator-prune-filesystems" check', builder)
