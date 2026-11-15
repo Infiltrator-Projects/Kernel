@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 bash tests/no-fuse.sh
 bash tests/failed-native-build-cleanup.sh
+bash tests/native-source-identity.sh
 bash tests/native-filesystem-profile.sh
 bash -n scripts/build-native.sh
 bash -n scripts/infiltrator/module-runtime.sh

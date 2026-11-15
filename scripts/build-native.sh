@@ -43,6 +43,11 @@ fi
 if (( system_package_mode )); then
   [[ "$mode" == --build-only && -n $source_dir && $skip_deps == 1 ]] ||
     fail 'System-package mode needs the pinned source and preinstalled build dependencies'
+  # System-package mode builds the pinned repository, not the source package
+  # inferred from the running distribution kernel. Initialise provenance now
+  # so recording it after a successful compile cannot fail under set -u.
+  . "$root/scripts/infiltrator/source-identity.sh"
+  native_source_identity "$source_dir" || fail 'Invalid pinned source identity'
 else
   rec=$(dpkg-query -W -f='${source:Package}|${source:Version}' "linux-headers-$running" 2>/dev/null) || fail "Matching kernel headers are not installed"
   IFS='|' read -r pkg ver <<< "$rec"
