@@ -38,6 +38,32 @@ engines remain owned by their independent Filesystem-* repositories.
 - `make build-only` compiles InfiltratorOS-versioned Debian image, headers and debug packages, without installation. The embedded module ABI remains transitional.
 - `make check` checks the first-party build script syntax and contract (not the kernel).
 
+
+### Planned hardware-aware native compilation
+
+After the current kernel is verified on the Dell, redesign the native builder
+for each target machine. This is an agreed plan, not an implemented feature.
+
+1. Inventory the machine's CPU, storage and controllers, graphics, network,
+   wireless, audio, input and other hardware before compilation; resolve the
+   drivers, firmware and configuration dependencies needed to boot and run it.
+2. Compile the required hardware support and essential kernel capabilities,
+   rather than every driver enabled in a generic distribution configuration.
+   Preserve the project's independently owned filesystem interfaces.
+3. Retain support for common removable devices and provide a documented path to
+   build support for hardware added later. A currently unloaded driver is not
+   evidence that it will never be needed; account for offline and recovery use.
+4. Reuse compatible previous build outputs when source, configuration, compiler
+   and hardware profile permit; rebuild invalidated outputs and schedule work
+   using the machine's actual CPU and available memory.
+
+Use native C/C++ for new project components, without Python. Before making a
+new build the normal choice, verify the required boot path, driver and firmware
+availability, current hardware, removable-device handling and recovery on the
+target machine. Preserve the existing working kernel and boot fallback during
+qualification; report missing support instead of declaring success.
+
+
 Native **uninstalled** build outputs are under `/Temporary/InfiltratorOS/Kernel/`:
 `Build/` for new object-tree work, `Packages/` for locally built
 artifacts, `Staging/InfiltratorOS-<VERSION>/System/Kernel/` for the
