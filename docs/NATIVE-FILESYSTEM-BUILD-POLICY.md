@@ -12,7 +12,10 @@ FILES' v2 formatter support cannot replace the VFS mount implementation.
 
 The native builder starts with the running distribution kernel's /boot/config
 and retains its filesystem-driver selections instead of forcibly turning
-off the independent-format groups. This applies to built-in (=y) and modular
+off the independent-format groups. It additionally selects the native
+BTRFS, HFS, HFS+, NTFS3, exFAT and XFS drivers as kernel modules,
+even when a previously built InfiltratorOS baseline had disabled them.
+The build rejects a configuration that cannot enable these drivers. This applies to built-in (=y) and modular
 (=m) configuration. The compatibility gate in
 scripts/infiltrator/prune-external-filesystems.c retains the historical
 apply/check command-line interface for CI and packaging, but **neither mode

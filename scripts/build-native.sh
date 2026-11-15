@@ -235,6 +235,12 @@ gcc -std=c11 -O2 -Wall -Wextra -Werror \
   --disable FUSE_FS --disable CUSE --disable VIRTIO_FS --disable FUSE_DAX \
   --disable FUSE_PASSTHROUGH --disable FUSE_IO_URING \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT
+# Restore the normal Linux VFS drivers used by mounted data volumes.
+# These are required until a tested Common V2 SO kernel bridge replaces them;
+# prior native kernels may already carry pruned .configs as their baseline.
+"$source_dir/scripts/config" --file "$obj/.config" \
+  --module BTRFS_FS --module HFS_FS --module HFSPLUS_FS \
+  --module NTFS3_FS --module EXFAT_FS --module XFS_FS
 log "Configuring host baseline with native filesystem mount drivers preserved"
 bash "$root/scripts/infiltrator/run-kbuild.sh" "${kbuild_args[@]}" olddefconfig
 if grep -Fqx 'CONFIG_LTO_CLANG=y' "$obj/.config"; then
@@ -248,6 +254,10 @@ grep -Fqx 'CONFIG_VMD=y' "$obj/.config" ||
   fail 'Intel VMD support must be built in for NVMe root devices behind VMD'
 grep -Fqx 'CONFIG_DEVTMPFS_MOUNT=y' "$obj/.config" ||
   fail 'devtmpfs must mount automatically on the direct native boot path'
+for filesystem_driver in BTRFS_FS HFS_FS HFSPLUS_FS NTFS3_FS EXFAT_FS XFS_FS; do
+  grep -Fqx "CONFIG_${filesystem_driver}=m" "$obj/.config" ||
+    fail "Required native filesystem mount driver unavailable: ${filesystem_driver}"
+done
 if grep -Eq '^CONFIG_(FUSE_FS|CUSE|VIRTIO_FS|FUSE_DAX|FUSE_PASSTHROUGH|FUSE_IO_URING)=[ym]$' "$obj/.config"; then
   fail 'Filesystem FUSE is prohibited in the native kernel configuration'
 fi

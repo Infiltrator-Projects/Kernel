@@ -40,6 +40,13 @@ class NativeFilesystemCompatibility(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid"):
             PROFILE.apply("CONFIG_XFS_FS=invalid\n")
 
+    def test_native_builder_selects_and_checks_mount_drivers(self):
+        builder = (ROOT / "scripts/build-native.sh").read_text(encoding="utf-8")
+        for symbol in ("BTRFS_FS", "HFS_FS", "HFSPLUS_FS",
+                       "NTFS3_FS", "EXFAT_FS", "XFS_FS"):
+            self.assertIn("--module " + symbol, builder)
+        self.assertIn("Required native filesystem mount driver unavailable", builder)
+
     def test_cli_preserves_config_on_both_modes(self):
         with tempfile.TemporaryDirectory() as td:
             config = Path(td) / ".config"
