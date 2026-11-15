@@ -1,58 +1,91 @@
-# Native Kernel filesystem build compatibility policy
+# Native Kernel filesystem build profile
 
-## Corrected build behaviour — 15 November 2026
+## Architectural requirement reaffirmed — 16 November 2026
 
-**Keep Linux's existing native filesystem drivers until the Common V2 .so
-kernel/VFS bridge actually mounts and accesses independent test media.**
+Filesystem-specific probing, mounting, data operations and formatting belong
+to the independent Common V2 filesystem implementations, not competing
+per-format Linux-native implementations. The Kernel should provide a generic
+VFS integration layer, not reintroduce format implementations as a workaround.
 
-An installed /System/Filesystems/*.so proves neither that Linux can load the
-image into kernel context nor that it can provide a POSIX-mounted namespace.
-BOOT and hosted applications have separate execution profiles. In particular,
-FILES' v2 formatter support cannot replace the VFS mount implementation.
+This change reverses the accidental reinstatement of native Btrfs, NTFS3,
+exFAT, XFS, HFS, HFS+, AFFS, Minix and UFS mount drivers. These must not be
+automatically selected in the normal InfiltratorOS Kernel build profile.
 
-The native builder starts with the running distribution kernel's /boot/config
-and retains its filesystem-driver selections instead of forcibly turning
-off the independent-format groups. It additionally selects the native
-BTRFS, HFS, HFS+, NTFS3, exFAT and XFS drivers as kernel modules,
-even when a previously built InfiltratorOS baseline had disabled them.
-The build rejects a configuration that cannot enable these drivers. This applies to built-in (=y) and modular
-(=m) configuration. The compatibility gate in
-scripts/infiltrator/prune-external-filesystems.c retains the historical
-apply/check command-line interface for CI and packaging, but **neither mode
-changes the configuration**. The Python counterpart has the same behaviour.
+The retained built-in EXT4 and FAT/EXT recovery drivers below are transitional
+boot compatibility only; they do NOT meet the requested SO-only architecture.
+The Common V2 provider ABI is userspace-facing: Linux cannot directly load an
+ELF .so as kernel code. A separately qualified generic kernel VFS bridge is
+still required, including for the installed EXT4 root, before the remaining
+bootstrap drivers can be retired. Never claim SO-only mounts or an SO-only
+boot are operational based solely on this build-policy correction.
 
-Do **not** disable BTRFS_FS, NTFS3_FS, NTFS_FS, HFS_FS, HFSPLUS_FS,
-EXFAT_FS, XFS_FS, AFFS_FS, MINIX_FS or UFS_FS merely because their
-independent .so repositories exist. FAT/EXT/VFS, host device drivers and
-boot-critical options remain preserved as before. The native builder still
-requires built-in EXT4/NVMe/VMD support for the current root path and
-continues to enforce the project prohibition on FUSE.
 
-This is a temporary compatibility measure, **not** qualification of the
-Common V2 kernel bridge and not a claim that a Linux driver exists for every
-Infiltrator filesystem. APFS, for example, has no corresponding standard
-in-tree Linux APFS VFS driver in this kernel configuration. A format with no
-qualified Linux driver requires a functioning kernel .so bridge before it
-can be mounted through ordinary Linux VFS calls.
+The normal InfiltratorOS `make configure-only` and `make build-only`
+builder starts from the host Mint/Debian kernel configuration. That host
+configuration often requests duplicate in-tree filesystem drivers even
+after their independent `Filesystem-*` repositories have been extracted.
 
-The independent filesystem repositories remain authoritative for the
-on-disk engines. Transitional native drivers cannot be removed until the
-exact installed .so, the generic kernel adapter, read/write operations,
-mount/umount, concurrent use, durability and root-bootstrap (where
-applicable) have passed real on-media tests.
+To stop recompiling those implementations, the native builder calls
+`scripts/infiltrator/prune-external-filesystems.py apply` on its **private
+build object `.config`**, then runs `olddefconfig` and
+`prune-external-filesystems.py check` before any real build.
+The actual three-way Boot → InfiltratorFS → Kernel QEMU workflow and
+the independent EXT2 external-module/two-boot QEMU qualification both apply
+and check the exact same profile. EXT2's own test still explicitly disables
+the in-tree EXT2 driver before compiling its independent replacement.
 
-## Validation
+## Excluded from the native kernel image and module build
 
-The compatibility gates must leave a host .config byte-for-byte unchanged:
-- bash tests/native-filesystem-profile.sh
-- python3 tests/nonboot-filesystem-build-profile.py
+| In-tree Kconfig | Independent format owner |
+| --- | --- |
+| `EXFAT_FS` | Filesystem-exFAT |
+| `NTFS3_FS`, `NTFS_FS` | Filesystem-NTFS |
+| `XFS_FS` | Filesystem-XFS |
+| `BTRFS_FS` | Filesystem-Btrfs |
+| `HFS_FS` | Filesystem-HFS |
+| `HFSPLUS_FS` | Filesystem-HFSPlus (including HFSX) |
+| `AFFS_FS` | Filesystem-OFS and Filesystem-FFS |
+| `MINIX_FS` | Filesystem-Minix |
+| `UFS_FS` | Filesystem-UFS1 and Filesystem-UFS2 |
 
-For a native build, confirm the effective .config retains the original
-BTRFS, NTFS3, HFS/HFSPLUS and other settings after olddefconfig. Missing
-native kernel module packages, incompatible vermagic and an absent driver
-are still separate failures; retaining Kconfig entries alone does not
-prove an installed machine can mount a particular volume.
+Both `=y` and `=m` are suppressed. The format source under
+`Kernel/fs/` is **not deleted**: it remains reference/provenance code
+and can still be compiled by deliberately running raw Linux Kbuild with
+another independent configuration. The native build profile removes it
+from the **normal InfiltratorOS Kbuild selection**.
 
-No build-policy change edits the host's existing kernel, installed module
-tree, mounted partitions, ESP or NVRAM. It takes effect in the next rebuilt
-InfiltratorOS kernel and tested module package.
+## Kept for the current boot/recovery transition
+
+`FAT_FS`, `VFAT_FS`, `MSDOS_FS`, `EXT2_FS`, `EXT4_FS`
+and their shared `JBD2`/`FS_MBCACHE` helpers are not changed by the
+profile. Neither are proc, sysfs, devtmpfs, initramfs, squashfs, VFS,
+networking, block device/EFI drivers or unrelated filesystems.
+
+The three-way QEMU boot path obtains the kernel and initramfs from
+InfiltratorFS. Its FAT32 EFI bootstrap is provided by Boot, not by
+in-tree Linux FAT drivers. The recovery fallback remains while independent
+FAT and EXT2/4 modules are separately ABI-qualified.
+
+## Important runtime boundary
+
+This deliberately saves **kernel compilation** rather than magically
+making Linux userspace `.so` files mountable in the native kernel.
+Existing independently released `.ko` binaries were largely built for
+Linux 6.12.107. The native InfiltratorOS Kernel has a **different module
+ABI and `vermagic`** (currently 0.1.1). Those old `.ko` artifacts cannot
+be loaded as replacements until rebuilt against the native
+`Module.symvers`, qualified on disposable media, and made discoverable
+by the native module loader. The non-boot formats above may therefore
+be **temporarily unavailable for native kernel mounts** even though
+their userspace `.so` interfaces remain separate.
+
+To inspect the exact build output after `make configure-only`:
+
+```sh
+python3 scripts/infiltrator/prune-external-filesystems.py check /Temporary/InfiltratorOS/Kernel/Build/obj/.config
+grep -E '^CONFIG_(XFS_FS|BTRFS_FS|NTFS3_FS|EXFAT_FS|FAT_FS|EXT4_FS)=' /Temporary/InfiltratorOS/Kernel/Build/obj/.config
+```
+
+Tests: `python3 tests/nonboot-filesystem-build-profile.py`,
+`make check`, and the real three-way VM qualification. This profile
+does not change Mint's host kernel, EFI/NVRAM or installed modules.
