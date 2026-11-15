@@ -34,6 +34,7 @@ jobs:
           set -euo pipefail
           python3 tests/verify-ci-contracts.py
           bash tests/no-fuse.sh
+          bash tests/failed-native-build-cleanup.sh
           python3 tests/filesystem-module-ownership.py
           python3 tests/nonboot-filesystem-build-profile.py
           sudo apt-get update

@@ -66,7 +66,7 @@ done
 if (( build_only && replace_existing )); then
   fail '--replace-existing requires native installation, not --build-only'
 fi
-for tool in git mktemp tee dpkg-deb sha256sum rsync; do
+for tool in git mktemp tee dpkg-deb sha256sum rsync stat; do
   command -v "$tool" >/dev/null || fail "Required command not installed: $tool"
 done
 temporary_root=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
@@ -123,13 +123,39 @@ fi
   fail "Native Kernel workspace is not writable by this user: $workspace"
 mkdir -p "$workspace/Build" "$workspace/Logs" "$workspace/Packages" "$workspace/Staging" ||
   fail "Cannot create native Temporary build directories: $workspace"
-work=$(mktemp -d "$workspace/Build/InfiltratorOS-Run.XXXXXXXX")
+build_parent=$(cd -- "$workspace/Build" && pwd -P)
+work=$(mktemp -d "$build_parent/InfiltratorOS-Run.XXXXXXXX")
+work_identity=$(stat -c '%d:%i' -- "$work")
 source_dir="$work/Source"
 obj="$work/obj"
 run_name=${work##*/}
 packages="$workspace/Packages/$run_name"
 stage="$workspace/Staging/$run_name"
 logfile="$workspace/Logs/$run_name.log"
+# Each runner owns exactly one new mktemp build tree. Failed attempts discard
+# only that tree, leaving logs, generated packages, staged data and separately
+# stored kernel backups available for diagnosis or recovery. Successful build
+# objects remain available for later incremental-build work.
+cleanup_failed_run() {
+  local status=$?
+  trap - EXIT
+  if (( status != 0 )); then
+    if [[ -d "$work" && ! -L "$work" &&
+          $(stat -c '%d:%i' -- "$work" 2>/dev/null) == "$work_identity" ]]; then
+      if rm -rf --one-file-system -- "$work"; then
+        printf 'Removed failed temporary build: %s\n' "$work" >&2
+      else
+        printf 'WARNING: could not remove failed temporary build: %s\n' "$work" >&2
+      fi
+    else
+      printf 'WARNING: build workspace changed; no automatic cleanup: %s\n' "$work" >&2
+    fi
+  fi
+  exit "$status"
+}
+trap cleanup_failed_run EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 printf 'Downloading InfiltratorOS Kernel source from GitHub commit %s\n' "$expected_commit"
 # Pin the immutable revision embedded at publication; NEVER silently switch
 # to a later main commit or use another machine's private compiler objects.

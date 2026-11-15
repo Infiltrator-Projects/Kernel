@@ -55,6 +55,9 @@ done
 INFILTRATOROS_TEMP_ROOT="$temp_root" \
   bash "$root/scripts/infiltrator/install-native.sh" \
   --packages "$packages" --install-root "$install_root"
+shopt -s nullglob
+verification_workspaces=("$temp_root"/Kernel/.NativeInstall-*)
+[[ ${#verification_workspaces[@]} -eq 0 ]]
 [[ -s "$install_root/System/Kernel/Images/InfiltratorOS-$version.img" ]]
 [[ -s "$install_root/System/Kernel/Modules/InfiltratorOS-$version/kernel/drivers/test.ko" ]]
 [[ -s "$install_root/System/Kernel/Headers/InfiltratorOS-$version/include/test.h" ]]
@@ -71,6 +74,8 @@ if INFILTRATOROS_TEMP_ROOT="$temp_root" \
   exit 1
 fi
 grep -Fq 'Refusing to overwrite existing native kernel installation' "$sandbox/reinstall.log"
+verification_workspaces=("$temp_root"/Kernel/.NativeInstall-*)
+[[ ${#verification_workspaces[@]} -eq 0 ]]
 # Previously published 0.1.1 packages may already occupy these paths.
 # Repair MUST require explicit approval, preserve their bytes and leave
 # independent filesystem providers unchanged.
@@ -81,5 +86,40 @@ INFILTRATOROS_TEMP_ROOT="$temp_root" \
 [[ $(cat "$install_root/System/Kernel/Images/InfiltratorOS-$version.img") == 'compiled native image' ]]
 backup_file=$(find "$temp_root/Kernel/Backups" -type f -name "InfiltratorOS-$version.img" -print -quit)
 [[ -n "$backup_file" && $(cat "$backup_file") == 'old wrong-ABI kernel image' ]]
+verification_workspaces=("$temp_root"/Kernel/.NativeInstall-*)
+[[ ${#verification_workspaces[@]} -eq 0 ]]
 [[ $(sha256sum "$install_root/System/Kernel/Filesystems/FAT16.ko" | cut -d' ' -f1) == "$before" ]]
+
+# A failed repair must restore the old kernel before removing its private
+# verification workspace. If restoration itself fails, retain that
+# workspace and the separate backup for manual recovery.
+mkdir -p "$sandbox/fail-bin"
+printf '#!/bin/sh\nexit 42\n' > "$sandbox/fail-bin/rsync"
+chmod +x "$sandbox/fail-bin/rsync"
+printf 'rollback image\n' > "$install_root/System/Kernel/Images/InfiltratorOS-$version.img"
+if PATH="$sandbox/fail-bin:$PATH" INFILTRATOROS_TEMP_ROOT="$temp_root" \
+  bash "$root/scripts/infiltrator/install-native.sh" \
+  --packages "$packages" --install-root "$install_root" --replace-existing \
+  > "$sandbox/rollback.log" 2>&1; then
+  echo 'ERROR: Failed repair reported success' >&2; exit 1
+fi
+[[ $(cat "$install_root/System/Kernel/Images/InfiltratorOS-$version.img") == 'rollback image' ]]
+verification_workspaces=("$temp_root"/Kernel/.NativeInstall-*)
+[[ ${#verification_workspaces[@]} -eq 0 ]]
+cat > "$sandbox/fail-bin/mv" <<'FAILEDMV'
+#!/bin/sh
+case "${2:-}" in */Backups/*) exit 42 ;; esac
+exec /usr/bin/mv "$@"
+FAILEDMV
+chmod +x "$sandbox/fail-bin/mv"
+if PATH="$sandbox/fail-bin:$PATH" INFILTRATOROS_TEMP_ROOT="$temp_root" \
+  bash "$root/scripts/infiltrator/install-native.sh" \
+  --packages "$packages" --install-root "$install_root" --replace-existing \
+  > "$sandbox/recovery.log" 2>&1; then
+  echo 'ERROR: Failed recovery reported success' >&2; exit 1
+fi
+grep -Fq 'Recovery was incomplete; retaining verification workspace:' "$sandbox/recovery.log"
+verification_workspaces=("$temp_root"/Kernel/.NativeInstall-*)
+[[ ${#verification_workspaces[@]} -eq 1 ]]
+find "$temp_root/Kernel/Backups" -type f -name "InfiltratorOS-$version.img" -exec grep -lFx 'rollback image' {} + | grep -q .
 echo 'PASS: native install, explicit same-version repair backup, independent filesystem preservation'

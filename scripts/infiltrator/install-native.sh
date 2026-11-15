@@ -32,7 +32,7 @@ done
 [[ "$packages" == /* && -d "$packages" && ! -L "$packages" ]] || fail 'Packages must be an existing absolute directory'
 [[ "$install_root" == /* && -d "$install_root" && ! -L "$install_root" ]] ||
   fail 'Install root must be an existing absolute non-symlink directory'
-for cmd in dpkg-deb tar awk rsync sha256sum mktemp find; do
+for cmd in dpkg-deb tar awk rsync sha256sum mktemp find stat; do
   command -v "$cmd" >/dev/null || fail "Missing utility: $cmd"
 done
 packages=$(cd "$packages" && pwd -P)
@@ -47,7 +47,9 @@ debug_pkg="infiltratoros-kernel-image-$version-dbg"
 temp_base=${INFILTRATOROS_TEMP_ROOT:-/Temporary/InfiltratorOS}
 [[ "$temp_base" == /* && "$temp_base" != / && -d "$temp_base/Kernel" ]] ||
   fail 'Missing native /Temporary workspace'
-workspace=$(mktemp -d "$temp_base/Kernel/.NativeInstall-$version.XXXXXXXX")
+workspace_parent=$(cd -- "$temp_base/Kernel" && pwd -P)
+workspace=$(mktemp -d "$workspace_parent/.NativeInstall-$version.XXXXXXXX")
+workspace_identity=$(stat -c '%d:%i' -- "$workspace")
 # An explicitly requested repair is transactional: prior same-version files
 # are moved into /Temporary and restored if the replacement cannot complete.
 rollback_needed=0
@@ -56,24 +58,41 @@ backup_dir=
 moved_paths=()
 managed_paths=()
 installation_exit() {
-  status=$?
+  local status=$? recovery_failed=0
+  trap - EXIT
   if (( status != 0 && rollback_needed )); then
     log "Repair failed; restoring previous native kernel files from $backup_dir"
     if (( installation_started )); then
       for rel in "${managed_paths[@]}"; do
-        "${writer[@]}" rm -rf -- "$target/$rel" ||
+        "${writer[@]}" rm -rf -- "$target/$rel" || {
           log "WARNING: could not remove partial replacement $target/$rel"
+          recovery_failed=1
+        }
       done
     fi
     for rel in "${moved_paths[@]}"; do
       if [[ -e "$backup_dir/$rel" || -L "$backup_dir/$rel" ]]; then
         "${writer[@]}" install -d -m 0755 "$(dirname "$target/$rel")" &&
-        "${writer[@]}" mv -- "$backup_dir/$rel" "$target/$rel" ||
+        "${writer[@]}" mv -- "$backup_dir/$rel" "$target/$rel" || {
           log "WARNING: recovery required for $rel; original remains at $backup_dir/$rel"
+          recovery_failed=1
+        }
       fi
     done
   fi
-  log "Temporary installation verification workspace: $workspace"
+  # This private mktemp directory contains reproducible extracted package
+  # copies, not the installed kernel or the separately retained backups. Do
+  # not delete a directory that was replaced while the installer was running.
+  if (( recovery_failed )); then
+    log "Recovery was incomplete; retaining verification workspace: $workspace"
+  elif [[ -d "$workspace" && ! -L "$workspace" &&
+          $(stat -c '%d:%i' -- "$workspace" 2>/dev/null) == "$workspace_identity" ]]; then
+    rm -rf --one-file-system -- "$workspace" ||
+      log "WARNING: could not remove temporary verification workspace: $workspace"
+  else
+    log "WARNING: verification workspace changed; no automatic cleanup: $workspace"
+  fi
+  exit "$status"
 }
 trap installation_exit EXIT
 mkdir -p "$workspace/unpacked" "$workspace/controls"
