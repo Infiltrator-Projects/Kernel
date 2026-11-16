@@ -172,8 +172,10 @@ static int extract_carrier(const u8 *raw, size_t bytes,
             got_payload = true;
         }
         if (section_name(raw, bytes, names, &sh, ".ifsmeta")) {
+            /* The compiler may mark this constant identity section
+             * SHF_ALLOC and SHF_GNU_RETAIN. Neither permits execution. */
             if (got_marker || sh.sh_type != SHT_PROGBITS ||
-                sh.sh_flags || !sh.sh_size)
+                (sh.sh_flags & SHF_EXECINSTR) || !sh.sh_size)
                 return -ENOEXEC;
             marker = sh;
             got_marker = true;
