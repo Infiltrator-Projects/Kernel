@@ -157,9 +157,9 @@ static ssize_t ifs_v2_read_iter(struct kiocb *iocb, struct iov_iter *to)
     if (!data)
         return -ENOMEM;
     while (iov_iter_count(to) && iocb->ki_pos < size) {
-        size_t bytes = min3_t(size_t, iov_iter_count(to),
-                              (u64)(size - iocb->ki_pos),
-                              IFS_V2_MAX_READ);
+        size_t bytes = min_t(size_t, iov_iter_count(to),
+                             IFS_V2_MAX_READ);
+        bytes = min_t(size_t, bytes, size - iocb->ki_pos);
         int ret;
         mutex_lock(&m->io_lock);
         ret = m->provider.core->read(m->volume, path,
