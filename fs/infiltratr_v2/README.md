@@ -26,3 +26,14 @@ Required for completion:
 
 Do not call this complete based on source compilation, VFS registration,
 or Boot's separate EFI filesystem read qualification.
+
+## Mount parameters and executable file support
+
+The VFS adapter has an explicit and validated `format=<id>` parameter.
+The ID selects an independently installed V2 module, never a built-in
+format parser. The `read_folio` path is backed exclusively by `CORE.READ`,
+so normal file reads, memory mappings, and executable page faults do not
+bypass the Common V2 provider. All mounts remain read-only.
+
+Until signed ELF admission is actually implemented and qualified, these
+operations cannot complete a mount; compilation does not prove runnability.

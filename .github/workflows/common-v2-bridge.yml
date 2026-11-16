@@ -33,6 +33,8 @@ jobs:
           make -s olddefconfig
           grep -qx 'CONFIG_INFILTRATR_V2_FS=y' .config
           make -j2 fs/infiltratr_v2/bridge.o fs/infiltratr_v2/elf_admission.o
+          grep -Fq '.read_folio = ifs_v2_read_folio' fs/infiltratr_v2/bridge.c
+          grep -Fq 'fsparam_string("format"' fs/infiltratr_v2/bridge.c
           test -s fs/infiltratr_v2/bridge.o
           test -s fs/infiltratr_v2/elf_admission.o
           # The admission gate cannot invoke a native mount or execute

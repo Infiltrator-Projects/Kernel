@@ -14,6 +14,8 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/fs_context.h>
+#include <linux/fs_parser.h>
+#include <linux/highmem.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -28,6 +30,31 @@
 #include <linux/infiltratr_fs_v2_adapter.h>
 
 #define IFS_V2_MAGIC 0x49534632U
+
+/* The mount format names the *independent* provider under
+ * /System/Filesystems. No format-specific code belongs in the adapter.
+ * A future qualified auto-discovery path may select this automatically. */
+struct ifs_v2_mount_options {
+    char format[64];
+};
+enum { Opt_format };
+static const struct fs_parameter_spec ifs_v2_params[] = {
+    fsparam_string("format", Opt_format),
+    {}
+};
+static bool ifs_v2_valid_format(const char *name)
+{
+    size_t n;
+    if (!name || !*name)
+        return false;
+    for (n = 0; n < 63 && name[n]; ++n)
+        if (!(name[n] >= 'a' && name[n] <= 'z') &&
+            !(name[n] >= '0' && name[n] <= '9') &&
+            name[n] != '_' && name[n] != '-')
+            return false;
+    return n && n < 64 && !name[n];
+}
+
 
 struct ifs_v2_mount {
     struct mutex io_lock;
@@ -140,47 +167,54 @@ static struct dentry *ifs_v2_lookup(struct inode *parent,
     return NULL;
 }
 
-static ssize_t ifs_v2_read_iter(struct kiocb *iocb, struct iov_iter *to)
+/* Read from the provider into the kernel page cache so that ordinary
+ * file reads, executable mappings and demand-paged binaries all use the
+ * same Common V2 provider. Never switch to a format-specific native reader. */
+static int ifs_v2_read_folio(struct file *file, struct folio *folio)
 {
-    struct inode *inode = file_inode(iocb->ki_filp);
+    struct inode *inode = folio->mapping->host;
     struct ifs_v2_mount *m = inode->i_sb->s_fs_info;
     const char *path = inode->i_private;
+    u64 start = folio_pos(folio);
     loff_t size = i_size_read(inode);
-    ssize_t copied = 0;
-    char *data;
+    size_t folio_bytes = folio_size(folio);
+    size_t wanted = 0, done = 0;
+    int ret = 0;
 
-    if (!path || iocb->ki_pos < 0)
+    if (!path) {
+        folio_end_read(folio, false);
         return -EINVAL;
-    if (iocb->ki_pos >= size)
-        return 0;
-    data = kmalloc(IFS_V2_MAX_READ, GFP_KERNEL);
-    if (!data)
-        return -ENOMEM;
-    while (iov_iter_count(to) && iocb->ki_pos < size) {
-        size_t bytes = min_t(size_t, iov_iter_count(to),
-                             IFS_V2_MAX_READ);
-        bytes = min_t(size_t, bytes, size - iocb->ki_pos);
-        int ret;
-        mutex_lock(&m->io_lock);
-        ret = m->provider.core->read(m->volume, path,
-                                     (u64)iocb->ki_pos, data, bytes);
-        mutex_unlock(&m->io_lock);
-        if (ret) {
-            if (!copied)
-                copied = ifs_v2_error(ret);
-            break;
-        }
-        if (copy_to_iter(data, bytes, to) != bytes) {
-            if (!copied)
-                copied = -EFAULT;
-            break;
-        }
-        iocb->ki_pos += bytes;
-        copied += bytes;
     }
-    kfree(data);
-    return copied;
+    if (start < size)
+        wanted = min_t(u64, folio_bytes, (u64)size - start);
+
+    /* A Common V2 read is strictly capped to the provider host transfer
+     * bound. Iterate high-order folios one mapped page at a time. */
+    while (done < folio_bytes) {
+        size_t chunk = min_t(size_t, PAGE_SIZE, folio_bytes - done);
+        size_t current = done < wanted ?
+                         min_t(size_t, chunk, wanted - done) : 0;
+        void *mapping = kmap_local_folio(folio, done);
+
+        if (current && !ret) {
+            mutex_lock(&m->io_lock);
+            ret = ifs_v2_error(m->provider.core->read(
+                    m->volume, path, start + done, mapping, current));
+            mutex_unlock(&m->io_lock);
+        }
+        if (ret || current < chunk)
+            memset((u8 *)mapping + (ret ? 0 : current), 0,
+                   chunk - (ret ? 0 : current));
+        kunmap_local(mapping);
+        done += chunk;
+    }
+    folio_end_read(folio, !ret);
+    return ret;
 }
+
+static const struct address_space_operations ifs_v2_aops = {
+    .read_folio = ifs_v2_read_folio,
+};
 
 static int ifs_v2_iterate(struct file *file, struct dir_context *ctx)
 {
@@ -225,7 +259,8 @@ static int ifs_v2_iterate(struct file *file, struct dir_context *ctx)
 }
 
 static const struct file_operations ifs_v2_files = {
-    .read_iter = ifs_v2_read_iter,
+    .read_iter = generic_file_read_iter,
+    .mmap = generic_file_mmap,
     .llseek = generic_file_llseek,
 };
 
@@ -273,6 +308,7 @@ static struct inode *ifs_v2_make_inode(struct super_block *sb,
     } else {
         set_nlink(inode, 1);
         i_size_write(inode, entry->size_bytes);
+        inode->i_mapping->a_ops = &ifs_v2_aops;
         inode->i_fop = &ifs_v2_files;
     }
     return inode;
@@ -322,6 +358,10 @@ static int ifs_v2_fill_super(struct super_block *sb, struct fs_context *fc)
 
     if (!fc->source || !(fc->sb_flags & SB_RDONLY))
         return -EROFS;
+    if (!fc->fs_private ||
+        !ifs_v2_valid_format(
+            ((struct ifs_v2_mount_options *)fc->fs_private)->format))
+        return -EINVAL;
     m = kzalloc(sizeof(*m), GFP_KERNEL);
     if (!m)
         return -ENOMEM;
@@ -357,7 +397,9 @@ static int ifs_v2_fill_super(struct super_block *sb, struct fs_context *fc)
 
     /* A loader returns an already VERIFIED, executable Common V2 module.
      * An absent/untrusted module is a hard failure, never a native mount. */
-    ret = ifs_v2_elf_acquire(NULL, &m->provider);
+    ret = ifs_v2_elf_acquire(
+        ((struct ifs_v2_mount_options *)fc->fs_private)->format,
+        &m->provider);
     if (ret)
         return ret;
     if (!m->provider.core ||
@@ -401,12 +443,41 @@ static int ifs_v2_get_tree(struct fs_context *fc)
     return get_tree_nodev(fc, ifs_v2_fill_super);
 }
 
+static int ifs_v2_parse_param(struct fs_context *fc,
+                              struct fs_parameter *param)
+{
+    struct ifs_v2_mount_options *options = fc->fs_private;
+    struct fs_parse_result parsed;
+    int token = fs_parse(fc, ifs_v2_params, param, &parsed);
+
+    if (token < 0)
+        return token;
+    if (token != Opt_format || !param->string ||
+        !ifs_v2_valid_format(param->string))
+        return -EINVAL;
+    strscpy(options->format, param->string, sizeof(options->format));
+    return 0;
+}
+
+static void ifs_v2_free_context(struct fs_context *fc)
+{
+    kfree(fc->fs_private);
+    fc->fs_private = NULL;
+}
+
 static const struct fs_context_operations ifs_v2_context_ops = {
+    .parse_param = ifs_v2_parse_param,
     .get_tree = ifs_v2_get_tree,
+    .free = ifs_v2_free_context,
 };
 
 static int ifs_v2_init_fs_context(struct fs_context *fc)
 {
+    struct ifs_v2_mount_options *options = kzalloc(sizeof(*options), GFP_KERNEL);
+
+    if (!options)
+        return -ENOMEM;
+    fc->fs_private = options;
     fc->ops = &ifs_v2_context_ops;
     fc->sb_flags |= SB_RDONLY;
     return 0;
@@ -416,6 +487,7 @@ static struct file_system_type ifs_v2_type = {
     .name = "infiltratr-v2",
     .init_fs_context = ifs_v2_init_fs_context,
     .kill_sb = ifs_v2_kill_sb,
+    .parameters = ifs_v2_params,
 };
 
 static int __init ifs_v2_init(void)
