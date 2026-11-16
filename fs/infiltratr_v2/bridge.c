@@ -192,19 +192,19 @@ static int ifs_v2_read_folio(struct file *file, struct folio *folio)
      * bound. Iterate high-order folios one mapped page at a time. */
     while (done < folio_bytes) {
         size_t chunk = min_t(size_t, PAGE_SIZE, folio_bytes - done);
-        size_t current = done < wanted ?
-                         min_t(size_t, chunk, wanted - done) : 0;
+        size_t requested = done < wanted ?
+                           min_t(size_t, chunk, wanted - done) : 0;
         void *mapping = kmap_local_folio(folio, done);
 
-        if (current && !ret) {
+        if (requested && !ret) {
             mutex_lock(&m->io_lock);
             ret = ifs_v2_error(m->provider.core->read(
-                    m->volume, path, start + done, mapping, current));
+                    m->volume, path, start + done, mapping, requested));
             mutex_unlock(&m->io_lock);
         }
-        if (ret || current < chunk)
-            memset((u8 *)mapping + (ret ? 0 : current), 0,
-                   chunk - (ret ? 0 : current));
+        if (ret || requested < chunk)
+            memset((u8 *)mapping + (ret ? 0 : requested), 0,
+                   chunk - (ret ? 0 : requested));
         kunmap_local(mapping);
         done += chunk;
     }
