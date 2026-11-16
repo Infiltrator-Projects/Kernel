@@ -5,6 +5,8 @@
 
 menu "File systems"
 
+source "fs/infiltratr_v2/Kconfig"
+
 # Use unaligned word dcache accesses
 config DCACHE_WORD_ACCESS
        bool

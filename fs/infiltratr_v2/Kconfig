@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config INFILTRATR_V2_FS
+    tristate "InfiltratorOS Common V2 generic read-only filesystem adapter"
+    depends on BLOCK && 64BIT
+    default n
+    help
+      Create a format-neutral Linux VFS adapter for independently owned
+      Common V2 filesystem shared objects. This is NOT a per-format Linux
+      filesystem driver, and does not use FUSE.
+
+      The executable-ELF admission gate currently fails closed. Selecting
+      this option does not yet allow a mounted root. Keep it disabled on
+      production systems until the kernel-stage loader and root qualification
+      are complete.
