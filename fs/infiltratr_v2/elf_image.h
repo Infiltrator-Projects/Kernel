@@ -17,6 +17,7 @@ struct ifs_v2_image_plan {
     const u8 *source;
     size_t source_bytes, memory_bytes;
     u64 entry;
+    u64 relro_start, relro_bytes;
     unsigned int count, relocations;
     Elf64_Shdr rela;
     struct ifs_v2_load_segment loads[IFS_V2_LOAD_MAX];

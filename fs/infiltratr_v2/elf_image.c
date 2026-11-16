@@ -229,7 +229,7 @@ static int inner_plan(const u8 *raw, size_t bytes,
 {
     Elf64_Ehdr elf;
     Elf64_Shdr names, symbols = {}, strings = {}, relocations = {};
-    Elf64_Phdr dynamic = {};
+    Elf64_Phdr dynamic = {}, relro = {};
     bool found_sym = false, found_str = false, found_rela = false;
     u64 dynsym_addr = 0, dynstr_addr = 0, dynstr_bytes = 0;
     u64 dynrela_addr = 0, dynrela_bytes = 0;
@@ -257,6 +257,14 @@ static int inner_plan(const u8 *raw, size_t bytes,
                 !span(ph.p_offset, ph.p_filesz, bytes))
                 return rc;
             dynamic = ph;
+        }
+        if (ph.p_type == PT_GNU_RELRO) {
+            if (relro.p_type || !ph.p_memsz ||
+                !span(ph.p_vaddr, ph.p_memsz,
+                      IFS_V2_IMAGE_MAX_BYTES) ||
+                ph.p_filesz > ph.p_memsz)
+                return rc;
+            relro = ph;
         }
         if (ph.p_type != PT_LOAD)
             continue;
@@ -295,6 +303,38 @@ static int inner_plan(const u8 *raw, size_t bytes,
         !loaded(plan, dynamic.p_vaddr, dynamic.p_filesz, PF_R, PF_X))
         return rc;
     plan->memory_bytes = round_up(plan->memory_bytes, 4096ULL);
+
+    /* PIE constant callback tables typically contain relocatable
+     * function pointers and live in .data.rel.ro, which starts RW.
+     * Admit them only if a signed PT_GNU_RELRO segment encloses them
+     * and every page in that segment can be made read-only in the
+     * Kernel before calling even the first module function. */
+    if (relro.p_type) {
+        u64 first = round_down(relro.p_vaddr, IFS_V2_PAGESIZE);
+        u64 last = round_up(relro.p_vaddr + relro.p_memsz,
+                            IFS_V2_PAGESIZE);
+        bool page_range_owned = false;
+
+        if (!loaded(plan, relro.p_vaddr, relro.p_memsz,
+                    PF_R | PF_W, PF_X))
+            return rc;
+        for (i = 0; i < plan->count; ++i) {
+            const struct ifs_v2_load_segment *s = &plan->loads[i];
+            u64 begin = round_down(s->address, IFS_V2_PAGESIZE);
+            u64 end = round_up(s->address + s->memory_bytes,
+                               IFS_V2_PAGESIZE);
+
+            if ((s->flags & (PF_R | PF_W | PF_X)) ==
+                (PF_R | PF_W) && first >= begin && last <= end) {
+                page_range_owned = true;
+                break;
+            }
+        }
+        if (!page_range_owned)
+            return rc;
+        plan->relro_start = relro.p_vaddr;
+        plan->relro_bytes = relro.p_memsz;
+    }
     section(raw, &elf, elf.e_shstrndx, &names);
     if (names.sh_type != SHT_STRTAB ||
         !span(names.sh_offset, names.sh_size, bytes))

@@ -88,3 +88,14 @@ InfiltratorOS Kernel Common V2 mounts use the opened block device's
 inode `i_size`, which can be zero even for a valid partition. Regular-file
 test images retain ordinary file-size geometry. This fixes an actual guest
 boot regression that reached the VFS mount and returned `-ENODEV`.
+
+## Relocatable read-only provider descriptors
+
+The freestanding Common V2 ELF commonly stores its callback tables in the
+signed `.data.rel.ro` section. The generic loader now validates the
+`PT_GNU_RELRO` page range against its writable load segment, performs
+signed relative relocations while NX, and then changes the complete RELRO
+pages to read-only before calling a provider function. The descriptor
+validator recognises those pages as effectively RO; ordinary writable data
+never qualifies as an immutable callback table. This avoids introducing
+format-specific code or weakening executable memory policy.

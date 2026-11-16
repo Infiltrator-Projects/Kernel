@@ -59,11 +59,19 @@ static bool inside(const struct ifs_v2_loaded *image,
     off = p - start;
     for (j = 0; j < image->plan.count; ++j) {
         const struct ifs_v2_load_segment *load = &image->plan.loads[j];
+        bool in_relro = image->plan.relro_bytes &&
+            off >= image->plan.relro_start &&
+            off - image->plan.relro_start <= image->plan.relro_bytes &&
+            length <= image->plan.relro_bytes -
+                      (off - image->plan.relro_start);
+        bool writable = (load->flags & PF_W) && !in_relro;
+
         if (off >= load->address &&
             off - load->address <= load->memory_bytes &&
             length <= load->memory_bytes - (off - load->address) &&
             (load->flags & required) == required &&
-            !(load->flags & forbidden))
+            !(load->flags & (forbidden & ~PF_W)) &&
+            (!(forbidden & PF_W) || !writable))
             return true;
     }
     return false;
@@ -284,6 +292,18 @@ int ifs_v2_execute_elf(const struct ifs_v2_image_plan *plan,
             ret = set_memory_ro(page, count);
         else
             ret = 0; /* RW + NX from the whole-image protection. */
+        if (ret)
+            goto bad;
+    }
+    /* Seal relocatable const tables and the dynamic linker metadata.
+     * Never admit a callback descriptor from a writable page. */
+    if (plan->relro_bytes) {
+        u64 first = round_down(plan->relro_start, (u64)PAGE_SIZE);
+        u64 last = round_up(plan->relro_start + plan->relro_bytes,
+                            (u64)PAGE_SIZE);
+
+        ret = set_memory_ro((unsigned long)image->memory + first,
+                            (last - first) >> PAGE_SHIFT);
         if (ret)
             goto bad;
     }
