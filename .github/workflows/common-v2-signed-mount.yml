@@ -56,7 +56,7 @@ jobs:
             -e TTY -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
             -e RD_GZIP \
             -d EXT4_FS -d EXT2_FS -d BTRFS_FS -d XFS_FS \
-            -d EXFAT_FS -d NTFS3_FS \
+            -d EXFAT_FS -d NTFS3_FS -d 9P_FS -d NET_9P \
             --set-str SYSTEM_TRUSTED_KEYS '' \
             --set-str SYSTEM_REVOCATION_KEYS ''
           make O="$obj" olddefconfig
