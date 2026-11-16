@@ -399,7 +399,7 @@ static int inner_plan(const u8 *raw, size_t bytes,
         switch (entry.d_tag) {
         case DT_NEEDED: case DT_PLTRELSZ: case DT_PLTGOT:
         case DT_INIT: case DT_FINI: case DT_SONAME: case DT_RPATH:
-        case DT_SYMBOLIC: case DT_REL: case DT_RELSZ: case DT_RELENT:
+        case DT_REL: case DT_RELSZ: case DT_RELENT:
         case DT_BIND_NOW: case DT_INIT_ARRAY: case DT_FINI_ARRAY:
         case DT_RUNPATH: case DT_PREINIT_ARRAY: case DT_JMPREL:
             return rc;
@@ -416,6 +416,12 @@ static int inner_plan(const u8 *raw, size_t bytes,
             if (entry.d_un.d_val != sizeof(Elf64_Rela))
                 return rc;
             break;
+        /* -Bsymbolic resolves local definitions before a shared ELF is
+         * embedded. It cannot introduce external imports. The separate
+         * undefined-symbol scan and RELATIVE-only relocations still apply.
+         * Rejecting this flag would reject every canonical freestanding
+         * EXT4 V2 provider built with the existing firmware link flags. */
+        case DT_SYMBOLIC: break;
         default: break;
         }
     }
