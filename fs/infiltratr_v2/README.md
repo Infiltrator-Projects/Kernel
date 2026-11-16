@@ -37,3 +37,19 @@ bypass the Common V2 provider. All mounts remain read-only.
 
 Until signed ELF admission is actually implemented and qualified, these
 operations cannot complete a mount; compilation does not prove runnability.
+
+## Detached-signature admission stage
+
+A verified provider must be read from `/System/Filesystems/FORMAT.so`
+using a validated format ID, and accompanied by `FORMAT.so.p7s`, a
+detached PKCS#7 signature trusted by the Kernel keyring. The signature
+covers the entire exact `.so` image, including its `.infiltrator_boot`
+section. The installed carrier is never executed directly.
+
+The non-executing ELF validation rejects foreign architecture, malformed
+section/program ranges, dynamic imports, TLS, constructors, W+X segments,
+non-relative relocations, and missing or mismatched Common V2 identity.
+Until executable-image protection and lifetime qualification are finished,
+a correctly signed and valid module still returns `-EOPNOTSUPP`; unsigned
+or modified images are rejected earlier. A signature is not a substitute
+for a complete VFS/early-boot test.
