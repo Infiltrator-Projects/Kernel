@@ -14,6 +14,27 @@
 #include <linux/string.h>
 #include "elf_image.h"
 
+/* Stable ELF64 ABI values absent from some kernel UAPI header revisions.
+ * These are format-neutral executable-linkage tags, not filesystem code. */
+#ifndef SHT_RELR
+#define SHT_RELR 19
+#endif
+#ifndef DT_BIND_NOW
+#define DT_BIND_NOW 24
+#endif
+#ifndef DT_INIT_ARRAY
+#define DT_INIT_ARRAY 25
+#endif
+#ifndef DT_FINI_ARRAY
+#define DT_FINI_ARRAY 26
+#endif
+#ifndef DT_RUNPATH
+#define DT_RUNPATH 29
+#endif
+#ifndef DT_PREINIT_ARRAY
+#define DT_PREINIT_ARRAY 32
+#endif
+
 #define IFS_V2_MAX_SECTIONS 256u
 #define IFS_V2_MAX_PHDRS 32u
 #define IFS_V2_MAX_SYMS 4096u
