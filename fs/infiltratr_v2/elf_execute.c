@@ -25,6 +25,7 @@
 #define IFS_V2_PROFILE_FIRMWARE (1ULL << 3)
 #define IFS_V2_GROUP_CORE_BIT (1ULL << 6)
 #define IFS_V2_GROUP_VOLUME_BIT (1ULL << 2)
+#define IFS_V2_GROUP_METADATA_BIT (1ULL << 1)
 
 typedef const struct ifs_v2_group *(*ifs_v2_query_group)(
         u32 group, u32 minimum_revision, u32 maximum_revision);
@@ -135,12 +136,28 @@ static bool volume_callbacks_valid(struct ifs_v2_loaded *image,
              executable(image, (const void *)volume->label));
 }
 
+static bool metadata_callbacks_valid(struct ifs_v2_loaded *image,
+                                     const struct ifs_v2_metadata_ops *metadata)
+{
+    if (!inside(image, metadata, sizeof(*metadata), PF_R, PF_W | PF_X) ||
+        metadata->header.abi_version != IFS_V2_ABI ||
+        metadata->header.structure_bytes < sizeof(*metadata) ||
+        metadata->header.group_id != IFS_V2_GROUP_METADATA ||
+        metadata->header.reserved ||
+        metadata->header.capabilities != IFS_V2_META_GET_MODE ||
+        !executable(image, (const void *)metadata->get) ||
+        metadata->set)
+        return false;
+    return true;
+}
+
 static int ifs_v2_bind(struct ifs_v2_loaded *image, const char *format,
                        struct ifs_v2_verified *out)
 {
     const struct ifs_v2_module_api *api;
     const struct ifs_v2_core *core;
     const struct ifs_v2_volume *volume = NULL;
+    const struct ifs_v2_metadata_ops *metadata = NULL;
     ifs_v2_entry_fn entry;
     void *function;
 
@@ -156,7 +173,8 @@ static int ifs_v2_bind(struct ifs_v2_loaded *image, const char *format,
           (IFS_V2_PROFILE_FREESTANDING | IFS_V2_PROFILE_FIRMWARE)) ||
         !(api->group_mask & IFS_V2_GROUP_CORE_BIT) ||
         (api->group_mask & ~(IFS_V2_GROUP_CORE_BIT |
-                             IFS_V2_GROUP_VOLUME_BIT)) ||
+                             IFS_V2_GROUP_VOLUME_BIT |
+                             IFS_V2_GROUP_METADATA_BIT)) ||
         !verified_format_id(image, api->format_id, format,
                             out->format_id) ||
         !executable(image, (const void *)api->query_group))
@@ -172,8 +190,15 @@ static int ifs_v2_bind(struct ifs_v2_loaded *image, const char *format,
         if (!volume_callbacks_valid(image, volume))
             return -ENOEXEC;
     }
+    if (api->group_mask & IFS_V2_GROUP_METADATA_BIT) {
+        metadata = (const void *)api->query_group(IFS_V2_GROUP_METADATA,
+                                                 IFS_V2_ABI, IFS_V2_ABI);
+        if (!metadata_callbacks_valid(image, metadata))
+            return -ENOEXEC;
+    }
     out->core = core;
     out->volume = volume;
+    out->metadata = metadata;
     return 0;
 }
 

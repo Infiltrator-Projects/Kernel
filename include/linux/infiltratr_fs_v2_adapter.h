@@ -14,6 +14,8 @@
 
 #define IFS_V2_ABI 2
 #define IFS_V2_GROUP_CORE 7
+#define IFS_V2_GROUP_METADATA 2
+#define IFS_V2_META_GET_MODE (1ULL << 2)
 #define IFS_V2_GROUP_VOLUME 3
 #define IFS_V2_ENTRY_FILE 1
 #define IFS_V2_ENTRY_DIR 2
@@ -91,6 +93,19 @@ struct ifs_v2_volume {
     /* The read-only VFS adapter must NEVER invoke any mutators. */
 };
 
+/* Common V2 metadata prefix, layout identical to the canonical ABI.
+ * Only GET_MODE is currently qualified for the read-only root adapter. */
+struct ifs_v2_metadata_info {
+    u32 structure_bytes, mask;
+    s64 created_ns, modified_ns, accessed_ns, changed_ns;
+    u32 mode, owner, group, attributes;
+};
+struct ifs_v2_metadata_ops {
+    struct ifs_v2_group header;
+    int (*get)(void *, const char *, struct ifs_v2_metadata_info *);
+    int (*set)(void *, const char *, const struct ifs_v2_metadata_info *);
+};
+
 /* Returned by the *authenticated* ELF loader only, never by format guesses.
  * The loader retains ownership of code/data until the last mount drops it.
  */
@@ -98,6 +113,7 @@ struct ifs_v2_verified {
     char format_id[64];
     const struct ifs_v2_core *core;
     const struct ifs_v2_volume *volume;
+    const struct ifs_v2_metadata_ops *metadata;
     void *image_lease;
     void (*release_image)(void *);
 };

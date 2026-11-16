@@ -26,6 +26,7 @@
 #include <linux/statfs.h>
 #include <linux/string.h>
 #include <linux/uio.h>
+#include <linux/user_namespace.h>
 #include <linux/vmalloc.h>
 #include <linux/infiltratr_fs_v2_adapter.h>
 
@@ -278,7 +279,14 @@ static struct inode *ifs_v2_make_inode(struct super_block *sb,
                                       const struct ifs_v2_entry *entry)
 {
     struct inode *inode;
+    struct ifs_v2_mount *m = sb->s_fs_info;
+    struct ifs_v2_metadata_info metadata = {
+        .structure_bytes = sizeof(metadata),
+    };
+    kuid_t owner = GLOBAL_ROOT_UID;
+    kgid_t group = GLOBAL_ROOT_GID;
     umode_t mode;
+    int ret;
 
     if (entry->type == IFS_V2_ENTRY_DIR)
         mode = S_IFDIR | 0555;
@@ -288,6 +296,23 @@ static struct inode *ifs_v2_make_inode(struct super_block *sb,
         /* A symlink without a qualified READLINK method is not a file. */
         return ERR_PTR(-EOPNOTSUPP);
 
+    /* Never guess execution bits from the filename or an EXT4-specific
+     * on-disk field. The independently verified provider owns metadata. */
+    if (m->provider.metadata) {
+        mutex_lock(&m->io_lock);
+        ret = m->provider.metadata->get(m->volume, path, &metadata);
+        mutex_unlock(&m->io_lock);
+        if (ret)
+            return ERR_PTR(ifs_v2_error(ret));
+        if (!(metadata.mask & IFS_V2_META_GET_MODE) ||
+            (metadata.mode & S_IFMT) != (mode & S_IFMT))
+            return ERR_PTR(-EUCLEAN);
+        owner = make_kuid(&init_user_ns, metadata.owner);
+        group = make_kgid(&init_user_ns, metadata.group);
+        if (!uid_valid(owner) || !gid_valid(group))
+            return ERR_PTR(-EUCLEAN);
+        mode = (mode & S_IFMT) | (metadata.mode & 07777);
+    }
     inode = new_inode(sb);
     if (!inode)
         return ERR_PTR(-ENOMEM);
@@ -298,8 +323,8 @@ static struct inode *ifs_v2_make_inode(struct super_block *sb,
     }
     inode->i_ino = get_next_ino();
     inode->i_mode = mode;
-    inode->i_uid = GLOBAL_ROOT_UID;
-    inode->i_gid = GLOBAL_ROOT_GID;
+    inode->i_uid = owner;
+    inode->i_gid = group;
     simple_inode_init_ts(inode);
     if (S_ISDIR(mode)) {
         set_nlink(inode, 2);

@@ -70,3 +70,13 @@ not demonstrate actual device mounting or usable system roots. The .p7s
 signature must be produced by a key trusted by the running InfiltratorOS
 Kernel, and an isolated signed-module QEMU mount test must pass before the
 installer enables this path or removes the native bootstrap.
+
+## Common V2 mode and ownership metadata
+
+When a signed provider advertises `METADATA.GET_MODE`, the generic VFS
+adapter queries it for every inode and preserves the format owner's
+file execution bits and UID/GID without ever decoding an on-disk format.
+A mismatch between the provider's reported type and the Core's type is
+a corruption error; a missing metadata group keeps conservative read-only
+permissions rather than inventing execute permission. This is needed for
+executables on real system volumes and remains subject to VM qualification.
