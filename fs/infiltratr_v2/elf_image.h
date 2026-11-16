@@ -24,4 +24,9 @@ struct ifs_v2_image_plan {
 /* The caller must authenticate every carrier byte before invoking this. */
 int ifs_v2_inspect_elf(const void *carrier, size_t bytes,
                        const char *format, struct ifs_v2_image_plan *plan);
+
+/* Executable image is never called before detached signature verification. */
+struct ifs_v2_verified;
+int ifs_v2_execute_elf(const struct ifs_v2_image_plan *plan,
+                       const char *format, struct ifs_v2_verified *out);
 #endif

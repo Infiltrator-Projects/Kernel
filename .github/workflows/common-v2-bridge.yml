@@ -32,14 +32,16 @@ jobs:
             --disable XFS_FS --disable EXFAT_FS --disable NTFS3_FS
           make -s olddefconfig
           grep -qx 'CONFIG_INFILTRATR_V2_FS=y' .config
-          make -j2 fs/infiltratr_v2/bridge.o fs/infiltratr_v2/elf_admission.o fs/infiltratr_v2/elf_image.o
+          make -j2 fs/infiltratr_v2/bridge.o fs/infiltratr_v2/elf_admission.o fs/infiltratr_v2/elf_image.o fs/infiltratr_v2/elf_execute.o
           grep -Fq '.read_folio = ifs_v2_read_folio' fs/infiltratr_v2/bridge.c
           grep -Fq 'fsparam_string("format"' fs/infiltratr_v2/bridge.c
           test -s fs/infiltratr_v2/bridge.o
           test -s fs/infiltratr_v2/elf_admission.o
           test -s fs/infiltratr_v2/elf_image.o
+          test -s fs/infiltratr_v2/elf_execute.o
           grep -Fq 'verify_pkcs7_signature(' fs/infiltratr_v2/elf_admission.c
           # The admission gate cannot invoke a native mount or execute
           # unverified ELF and must fail closed until the loader is qualified.
-          grep -Fq 'return -EOPNOTSUPP;' fs/infiltratr_v2/elf_admission.c
+          grep -Fq 'ifs_v2_execute_elf(&plan, format, verified)' fs/infiltratr_v2/elf_admission.c
+          grep -Fq 'set_memory_rox(' fs/infiltratr_v2/elf_execute.c
           ! grep -RE 'call_usermodehelper|fuse_|request_module|vfs_kern_mount' fs/infiltratr_v2

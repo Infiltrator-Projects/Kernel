@@ -81,10 +81,9 @@ int ifs_v2_elf_acquire(const char *format, struct ifs_v2_verified *verified)
     if (ret)
         goto out;
 
-    /* Stage 2 must allocate protected executable memory and retain it
-     * through unmount. Do NOT cast a userspace .so to a .ko or bypass
-     * verification because the filesystem has a familiar name. */
-    ret = -EOPNOTSUPP;
+    /* The signature and no-import image have both passed validation.
+     * Only the embedded freestanding ELF gets its own protected mapping. */
+    ret = ifs_v2_execute_elf(&plan, format, verified);
 out:
     vfree(signature);
     vfree(library);

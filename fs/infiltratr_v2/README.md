@@ -53,3 +53,20 @@ Until executable-image protection and lifetime qualification are finished,
 a correctly signed and valid module still returns `-EOPNOTSUPP`; unsigned
 or modified images are rejected earlier. A signature is not a substitute
 for a complete VFS/early-boot test.
+
+## Protected executable Common V2 image
+
+The signed ELF admission stage now invokes the isolated x86-64 executable
+mapping only for the validated no-import freestanding image. The Kernel
+rejects any missing or untrusted detached signature, loader imports,
+W+X segment, foreign descriptor, wrong format ID, out-of-image callbacks,
+unsupported mutable Common V2 core operations, or relocation outside its
+writable signed image. Each mount gets independent image code/data and a
+lifetime lease released only at unmount. Code pages are ROX; data and gaps
+are NX. The ordinary hosted SO is never executed as Kernel code.
+
+**Qualification caveat:** source-level protection and a successful compile do
+not demonstrate actual device mounting or usable system roots. The .p7s
+signature must be produced by a key trusted by the running InfiltratorOS
+Kernel, and an isolated signed-module QEMU mount test must pass before the
+installer enables this path or removes the native bootstrap.
