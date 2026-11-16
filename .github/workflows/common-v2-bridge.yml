@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-2.0-only
+name: Compile strict Common V2 kernel bridge
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'fs/infiltratr_v2/**'
+      - 'include/linux/infiltratr_fs_v2_adapter.h'
+      - 'fs/Kconfig'
+      - 'fs/Makefile'
+      - '.github/workflows/common-v2-bridge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  vfs-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Install minimal kernel compilation prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc make flex bison bc libssl-dev libelf-dev
+      - name: Qualify the isolated generic VFS adapter with native format drivers disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -s defconfig
+          scripts/config --enable INFILTRATR_V2_FS \
+            --disable EXT4_FS --disable EXT2_FS --disable BTRFS_FS \
+            --disable XFS_FS --disable EXFAT_FS --disable NTFS3_FS
+          make -s olddefconfig
+          grep -qx 'CONFIG_INFILTRATR_V2_FS=y' .config
+          make -j2 fs/infiltratr_v2/bridge.o fs/infiltratr_v2/elf_admission.o
+          test -s fs/infiltratr_v2/bridge.o
+          test -s fs/infiltratr_v2/elf_admission.o
+          # The admission gate cannot invoke a native mount or execute
+          # unverified ELF and must fail closed until the loader is qualified.
+          grep -Fq 'return -EOPNOTSUPP;' fs/infiltratr_v2/elf_admission.c
+          ! grep -RE 'call_usermodehelper|fuse_|request_module|vfs_kern_mount' fs/infiltratr_v2
