@@ -401,17 +401,25 @@ static int ifs_v2_fill_super(struct super_block *sb, struct fs_context *fc)
         return -ENOTBLK;
     if (file_inode(file)->i_sb->s_type == sb->s_type)
         return -ELOOP;
-    if (i_size_read(file_inode(file)) <= 0)
+    /* A device node's inode size is not the capacity of its block device.
+     * The real partition capacity comes from the opened block_device.
+     * Regular-file loop/test images instead use their inode size. */
+    if (S_ISBLK(file_inode(file)->i_mode)) {
+        struct block_device *bdev = file_bdev(file);
+
+        sector = bdev_logical_block_size(bdev);
+        m->host.volume_bytes = bdev_nr_bytes(bdev);
+    } else {
+        m->host.volume_bytes = i_size_read(file_inode(file));
+    }
+    if (!m->host.volume_bytes)
         return -ENODEV;
-    if (S_ISBLK(file_inode(file)->i_mode))
-        sector = bdev_logical_block_size(file_bdev(file));
     if (sector < 512 || sector > 65536 || !is_power_of_2(sector))
         return -EINVAL;
 
     m->host.abi_version = IFS_V2_ABI;
     m->host.structure_bytes = sizeof(m->host);
     m->host.capabilities = IFS_V2_READ_ONLY;
-    m->host.volume_bytes = i_size_read(file_inode(file));
     m->host.logical_sector_bytes = sector;
     m->host.physical_sector_bytes = sector;
     m->host.maximum_transfer_bytes = round_up(IFS_V2_MAX_READ, sector);

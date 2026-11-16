@@ -43,6 +43,10 @@ b=/bin/busybox
 exec </dev/console >/dev/console 2>&1
 $b mount -t devtmpfs devtmpfs /dev
 $b mount -t proc proc /proc
+# Expose the actual device and VFS registration in the serial evidence,
+# so a device-probing failure cannot masquerade as provider admission.
+$b ls -l /dev/vda
+$b grep -F 'infiltratr-v2' /proc/filesystems
 if $b grep -qw ext4 /proc/filesystems; then
   echo COMMON_V2_NATIVE_FORMAT_FALLBACK_DETECTED
   $b poweroff -f

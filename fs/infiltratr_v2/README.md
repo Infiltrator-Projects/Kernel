@@ -80,3 +80,11 @@ A mismatch between the provider's reported type and the Core's type is
 a corruption error; a missing metadata group keeps conservative read-only
 permissions rather than inventing execute permission. This is needed for
 executables on real system volumes and remains subject to VM qualification.
+
+## Block-device geometry fix
+
+InfiltratorOS Kernel Common V2 mounts use the opened block device's
+`bdev_nr_bytes` and `bdev_logical_block_size`, never the device node's
+inode `i_size`, which can be zero even for a valid partition. Regular-file
+test images retain ordinary file-size geometry. This fixes an actual guest
+boot regression that reached the VFS mount and returned `-ENODEV`.
